@@ -524,6 +524,56 @@ img,svg,video{max-width:100%}
 .sd-box{display:flex;flex-direction:column}
 .wrap.no-scroll{overflow-x:visible}
 
+/* ───────── ТРАНСФЕРЫ ИЗ ЕВРОПЫ: АДАПТИВНАЯ ФОРМА ───────── */
+.eur-tr-panel{margin-top:16px;border:1.5px solid #bfdbfe;background:#f8fafc;border-radius:12px}
+.eur-tr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.eur-tr-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.eur-tr-title{margin:0;color:#1e3a8a;font-size:16px;font-weight:700}
+.eur-tr-mode-switch{display:inline-flex;gap:6px;flex-wrap:wrap}
+.eur-tr-mode-switch button{font-size:12.5px;padding:7px 12px;min-height:36px}
+.eur-tr-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px 12px;align-items:end}
+.eur-tr-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.eur-tr-field label{margin:0;font-size:12px;font-weight:700;color:#334155;line-height:1.2}
+.eur-tr-field input,.eur-tr-field select{width:100%;min-width:0;box-sizing:border-box;background:#fff;border:1px solid #b9c8be;border-radius:8px;padding:9px 11px;font-size:14.5px;min-height:42px;color:var(--ink)}
+.eur-tr-field input:focus,.eur-tr-field select:focus{border-color:#1d4ed8}
+.eur-tr-sellon{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #b9c8be;border-radius:8px;padding:0 11px;min-height:42px;box-sizing:border-box}
+.eur-tr-sellon input{border:0 !important;padding:8px 0 !important;min-height:38px !important;background:transparent !important;width:100%;min-width:0;font-weight:600}
+.eur-tr-sellon-pct{font-size:13.5px;font-weight:700;color:var(--muted);flex-shrink:0}
+.eur-tr-span-name{grid-column:span 6}
+.eur-tr-span-pos{grid-column:span 3}
+.eur-tr-span-age{grid-column:span 3}
+.eur-tr-span-country{grid-column:span 4}
+.eur-tr-span-club{grid-column:span 4}
+.eur-tr-span-fee{grid-column:span 4}
+.eur-tr-span-type{grid-column:span 5}
+.eur-tr-span-sellon{grid-column:span 3}
+.eur-tr-span-submit{grid-column:span 4;display:flex;align-items:flex-end}
+.eur-tr-submit{width:100%;min-height:42px;background:#1d4ed8;color:#fff;font-size:14.5px;font-weight:700;border-radius:8px}
+.eur-tr-submit:hover{background:#1e40af}
+.eur-tr-cond-box{display:none;margin-top:12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px}
+.eur-tr-cond-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;align-items:end;margin-top:8px}
+.eur-tr-cond-main{grid-column:span 8}
+.eur-tr-cond-fee{grid-column:span 4}
+.eur-tr-presets{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.eur-tr-batch-text{width:100%;min-height:110px;font-family:ui-monospace,Consolas,monospace;font-size:13.5px;line-height:1.45;padding:10px 12px;border-radius:8px;border:1px solid #b9c8be;background:#fff;box-sizing:border-box}
+.eur-trq-tabs{display:flex;gap:6px;flex-wrap:wrap !important;margin:0 0 12px;border-bottom:0 !important;overflow-x:visible !important}
+.eur-trq-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#475569;font-size:12.5px;font-weight:600;cursor:pointer;min-height:36px;margin-bottom:0 !important;border-bottom:1px solid #cbd5e1 !important}
+.eur-trq-tabs button:hover{background:#f1f5f9;color:#0f172a;border-radius:8px}
+.eur-trq-tabs button.on{background:#eff6ff;color:#1e3a8a;border-color:#1d4ed8 !important;border-bottom-color:#1d4ed8 !important;font-weight:700;box-shadow:0 1px 2px rgba(29,78,216,0.12)}
+@media(max-width:760px){
+  .eur-tr-mode-switch{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .eur-tr-mode-switch button{width:100%}
+  .eur-tr-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .eur-tr-span-name,.eur-tr-span-country,.eur-tr-span-club,.eur-tr-span-type,.eur-tr-span-submit,.eur-tr-cond-main,.eur-tr-cond-fee{grid-column:1 / -1}
+  .eur-tr-span-pos,.eur-tr-span-age,.eur-tr-span-fee,.eur-tr-span-sellon{grid-column:span 1}
+  .eur-tr-field input,.eur-tr-field select{font-size:16px !important;min-height:44px;padding:10px 12px}
+  .eur-tr-sellon{min-height:44px;padding:0 12px}
+  .eur-tr-submit,#tr_batch_send{width:100%;min-height:46px;font-size:15px}
+  .eur-tr-cond-grid{grid-template-columns:minmax(0,1fr)}
+  .eur-trq-tabs{gap:6px !important}
+  .eur-trq-tabs button{flex:1 1 auto;font-size:12px !important;padding:7px 9px !important;min-height:38px}
+}
+
 /* ───────── ЖЕРЕБЬЕВКА: СТИЛИ СТУДИИ И ПРЯМОЙ ТРАНСЛЯЦИИ ───────── */
 .draw-admin-banner{background:linear-gradient(135deg,#0a291b 0%,#1b5c3f 50%,#0d3826 100%);color:#fff;border-radius:12px;padding:16px 20px;margin-bottom:16px;box-shadow:0 4px 18px rgba(16,38,28,0.18);border:1px solid #f0c419;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
 .draw-banner-content{flex:1;min-width:260px}
@@ -4175,73 +4225,92 @@ async function pgRegulations(app, reqTab) {
 
 function renderEuropeanTransferPanelHtml() {
   return `
-    <div class="panel" style="margin-top:16px;border:1.5px solid #bfdbfe;background:#f8fafc;border-radius:10px">
-      <div class="row sp" style="flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
-        <div>
-          <h3 style="margin:0;display:flex;align-items:center;gap:8px;color:#1e3a8a">
-            <span>🌍 Заявка на трансфер из Европы</span>
+    <div class="panel eur-tr-panel">
+      <div class="eur-tr-head">
+        <div style="flex:1;min-width:0">
+          <div class="eur-tr-title-row">
+            <h3 class="eur-tr-title">🌍 Заявка на трансфер из Европы</h3>
             <span class="tag" style="background:#dbeafe;color:#1e40af;font-size:11.5px">Проверка админа + ИИ</span>
-          </h3>
-          <p class="muted small" style="margin:4px 0 0">
-            Для заявки укажите <b>ФИО игрока</b>, <b>позицию</b>, <b>возраст</b>, <b>страну</b>, <b>текущий клуб</b> и <b>сумму сделки</b> (покупка или аренда). Остальные данные (рыночную цену и профиль) <b>нейросеть дополнит автоматически</b>. Заявка поступит администратору лиги.
+          </div>
+          <p class="muted small" style="margin:6px 0 0">
+            Укажите <b>ФИО игрока</b>, <b>позицию</b>, <b>возраст</b>, <b>страну</b>, <b>текущий клуб</b> и <b>сумму сделки</b> (покупка или аренда). Остальные данные (рыночную цену и профиль) <b>нейросеть дополнит автоматически</b>.
           </p>
         </div>
-        <div class="row" style="gap:4px">
-          <button type="button" class="btn sm on" id="tr_tab_single" style="font-size:12px;padding:4px 10px">👤 Один игрок</button>
-          <button type="button" class="btn sm alt" id="tr_tab_batch" style="font-size:12px;padding:4px 10px">📋 Добавить списком</button>
+        <div class="eur-tr-mode-switch">
+          <button type="button" class="btn sm on" id="tr_tab_single">👤 Один игрок</button>
+          <button type="button" class="btn sm alt" id="tr_tab_batch">📋 Добавить списком</button>
         </div>
       </div>
 
       <!-- Ввод одного игрока -->
-      <div id="tr_single_wrap" style="margin-top:10px">
-        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
-          <input id="tr_name" placeholder="ФИО игрока (напр. Виктор Дьёкереш)" style="flex:2;min-width:190px">
-          <select id="tr_pos" style="width:auto;min-width:110px" title="Позиция игрока">
-            <option value="">Позиция…</option>
-            <option value="ВР">ВР (Вратарь)</option>
-            <option value="ЦЗ">ЦЗ (Центр. защитник)</option>
-            <option value="ЛЗ">ЛЗ (Левый защитник)</option>
-            <option value="ПЗ">ПЗ (Правый защитник)</option>
-            <option value="ОП">ОП (Опорный полузащитник)</option>
-            <option value="ЦП">ЦП (Центр. полузащитник)</option>
-            <option value="АП">АП (Атак. полузащитник)</option>
-            <option value="ЛВ">ЛВ (Левый вингер)</option>
-            <option value="ПВ">ПВ (Правый вингер)</option>
-            <option value="ЦФ">ЦФ (Центр. нападающий)</option>
-          </select>
-          <input type="number" id="tr_age" min="14" max="45" placeholder="Возраст" title="Возраст игрока (лет)" style="width:92px">
-          <input id="tr_country" placeholder="Страна (напр. Швеция)" title="Страна / гражданство игрока" style="flex:1.1;min-width:140px">
-          <input id="tr_club" placeholder="Клуб (напр. Спортинг)" style="flex:1.3;min-width:150px">
-          <input id="tr_fee" placeholder="Сумма (напр. €65M)" value="€15.0M" style="flex:1;min-width:110px">
-          <select id="tr_type" style="width:auto;min-width:140px">
-            <option value="transfer">Полноценный трансфер</option>
-            <option value="loan">Аренда</option>
-            <option value="loan_mandatory_rpl">🛡️ Аренда с обязательным выкупом</option>
-          </select>
-          <div style="display:flex;align-items:center;gap:4px;background:#fff;padding:4px 8px;border-radius:6px;border:1px solid #cbd5e1">
-            <span class="small muted" style="white-space:nowrap" title="Процент от перепродажи в пользу европейского клуба (от 0% до 90%)">🏷️ Sell-on:</span>
-            <input type="number" id="tr_sell_on" min="0" max="90" step="1" value="20" placeholder="0-90%" style="width:58px;padding:2px 4px;font-size:13px;border:none;background:transparent" title="Любой процент от 0% до 90%">
-            <span class="small muted" style="font-weight:700">%</span>
+      <div id="tr_single_wrap" style="margin-top:8px">
+        <div class="eur-tr-grid">
+          <div class="eur-tr-field eur-tr-span-name">
+            <label for="tr_name">ФИО игрока</label>
+            <input id="tr_name" placeholder="Напр. Виктор Дьёкереш" autocomplete="off">
           </div>
-          <button class="btn" id="tr_send" style="background:#1d4ed8;color:#fff">Отправить заявку админу</button>
-        </div>
+          <div class="eur-tr-field eur-tr-span-pos">
+            <label for="tr_pos">Позиция</label>
+            <select id="tr_pos" title="Позиция игрока">
+              <option value="">Выберите…</option>
+              <option value="ВР">ВР (Вратарь)</option>
+              <option value="ЦЗ">ЦЗ (Центр. защитник)</option>
+              <option value="ЛЗ">ЛЗ (Левый защитник)</option>
+              <option value="ПЗ">ПЗ (Правый защитник)</option>
+              <option value="ОП">ОП (Опорный полузащитник)</option>
+              <option value="ЦП">ЦП (Центр. полузащитник)</option>
+              <option value="АП">АП (Атак. полузащитник)</option>
+              <option value="ЛВ">ЛВ (Левый вингер)</option>
+              <option value="ПВ">ПВ (Правый вингер)</option>
+              <option value="ЦФ">ЦФ (Центр. нападающий)</option>
+            </select>
+          </div>
+          <div class="eur-tr-field eur-tr-span-age">
+            <label for="tr_age">Возраст</label>
+            <input type="number" id="tr_age" min="14" max="45" inputmode="numeric" placeholder="Напр. 26" title="Возраст игрока (лет)">
+          </div>
 
-        <div id="tr_condition_wrap" style="display:none;margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
-          <div class="row sp" style="flex-wrap:wrap;gap:8px;align-items:center">
-            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#92400e;margin:0">
-              <input type="checkbox" id="tr_mandatory_rpl" style="width:auto"> 🛡️ Обязательное право выкупа при наступлении условия
-            </label>
-            <div style="display:inline-flex;align-items:center;gap:6px">
-              <span class="small muted" style="font-weight:600">Сумма выкупа:</span>
-              <input id="tr_buyout_fee" placeholder="€15.0M" value="€15.0M" style="width:105px;padding:3px 6px;font-size:12.5px">
+          <div class="eur-tr-field eur-tr-span-country">
+            <label for="tr_country">Страна / гражданство</label>
+            <input id="tr_country" placeholder="Напр. Швеция" title="Страна / гражданство игрока" autocomplete="off">
+          </div>
+          <div class="eur-tr-field eur-tr-span-club">
+            <label for="tr_club">Текущий клуб</label>
+            <input id="tr_club" placeholder="Напр. Спортинг" autocomplete="off">
+          </div>
+          <div class="eur-tr-field eur-tr-span-fee">
+            <label for="tr_fee">Сумма сделки</label>
+            <input id="tr_fee" placeholder="Напр. €65M" value="€15.0M">
+          </div>
+
+          <div class="eur-tr-field eur-tr-span-sellon">
+            <label for="tr_sell_on" title="Процент от перепродажи в пользу европейского клуба (от 0% до 90%)">🏷️ Sell-on (%)</label>
+            <div class="eur-tr-sellon">
+              <input type="number" id="tr_sell_on" min="0" max="90" step="1" inputmode="numeric" value="20" placeholder="0–90" title="Любой процент от 0% до 90%">
+              <span class="eur-tr-sellon-pct">%</span>
             </div>
           </div>
-          <div style="margin-top:8px">
-            <label class="small muted" style="display:block;margin-bottom:4px;font-weight:600;color:#78350f">
-              Условие обязательного выкупа (любое условие клуба):
-            </label>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <input id="tr_condition" list="tr_cond_presets" placeholder="Введите любое условие (сохранение в РПЛ, еврокубки, от 15 матчей...)" value="Сохранение прописки в РПЛ" style="flex:1;min-width:260px;padding:5px 8px;font-size:12.5px">
+          <div class="eur-tr-field eur-tr-span-type">
+            <label for="tr_type">Тип сделки</label>
+            <select id="tr_type">
+              <option value="transfer">Полноценный трансфер</option>
+              <option value="loan">Аренда</option>
+              <option value="loan_mandatory_rpl">🛡️ Аренда с обязательным выкупом</option>
+            </select>
+          </div>
+          <div class="eur-tr-span-submit">
+            <button class="btn eur-tr-submit" id="tr_send">Отправить заявку админу</button>
+          </div>
+        </div>
+
+        <div id="tr_condition_wrap" class="eur-tr-cond-box">
+          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#92400e;margin:0">
+            <input type="checkbox" id="tr_mandatory_rpl" style="width:auto"> 🛡️ Обязательное право выкупа при наступлении условия
+          </label>
+          <div class="eur-tr-cond-grid">
+            <div class="eur-tr-field eur-tr-cond-main">
+              <label for="tr_condition" style="color:#78350f">Условие обязательного выкупа</label>
+              <input id="tr_condition" list="tr_cond_presets" placeholder="Напр. сохранение в РПЛ, еврокубки, от 15 матчей..." value="Сохранение прописки в РПЛ">
               <datalist id="tr_cond_presets">
                 <option value="Сохранение прописки в РПЛ">
                 <option value="Выход в еврокубки / топ-4">
@@ -4250,30 +4319,34 @@ function renderEuropeanTransferPanelHtml() {
                 <option value="Безусловный обязательный выкуп">
               </datalist>
             </div>
-            <div class="row" style="gap:4px;margin-top:5px;flex-wrap:wrap">
-              <span class="small muted" style="font-size:11px">Пресеты:</span>
-              <button type="button" class="btn alt sm" style="padding:1px 6px;font-size:11px" onclick="$('#tr_condition').value='Сохранение прописки в РПЛ'">В РПЛ</button>
-              <button type="button" class="btn alt sm" style="padding:1px 6px;font-size:11px" onclick="$('#tr_condition').value='Выход в топ-4'">Топ-4</button>
-              <button type="button" class="btn alt sm" style="padding:1px 6px;font-size:11px" onclick="$('#tr_condition').value='Сыграно от 15 матчей'">От 15 матчей</button>
-              <button type="button" class="btn alt sm" style="padding:1px 6px;font-size:11px" onclick="$('#tr_condition').value='Безусловный выкуп'">Безусловный</button>
+            <div class="eur-tr-field eur-tr-cond-fee">
+              <label for="tr_buyout_fee" style="color:#78350f">Сумма выкупа</label>
+              <input id="tr_buyout_fee" placeholder="€15.0M" value="€15.0M">
             </div>
+          </div>
+          <div class="eur-tr-presets">
+            <span class="small muted" style="font-size:11.5px">Пресеты:</span>
+            <button type="button" class="btn alt sm" style="padding:3px 8px;font-size:11.5px;min-height:28px" onclick="$('#tr_condition').value='Сохранение прописки в РПЛ'">В РПЛ</button>
+            <button type="button" class="btn alt sm" style="padding:3px 8px;font-size:11.5px;min-height:28px" onclick="$('#tr_condition').value='Выход в топ-4'">Топ-4</button>
+            <button type="button" class="btn alt sm" style="padding:3px 8px;font-size:11.5px;min-height:28px" onclick="$('#tr_condition').value='Сыграно от 15 матчей'">От 15 матчей</button>
+            <button type="button" class="btn alt sm" style="padding:3px 8px;font-size:11.5px;min-height:28px" onclick="$('#tr_condition').value='Безусловный выкуп'">Безусловный</button>
           </div>
         </div>
       </div>
 
       <!-- Ввод списка игроков -->
       <div id="tr_batch_wrap" style="display:none;margin-top:10px">
-        <p class="muted small" style="margin:0 0 6px">
+        <p class="muted small" style="margin:0 0 8px">
           Введите список игроков (каждый с новой строки). Формат: <code>ФИО, Позиция, Возраст, Страна, Клуб, Сумма, Тип сделки, Sell-on</code>. Можно указать условие выкупа (например: <code>условие: выход в еврокубки</code>).
         </p>
-        <textarea id="tr_batch_text" rows="4" style="width:100%;font-family:monospace;font-size:13px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;box-sizing:border-box" placeholder="Виктор Дьёкереш, ЦФ, 26, Швеция, Спортинг, €65M, покупка, 25% sell-on&#10;Арда Гюлер, АП, 21, Турция, Реал Мадрид, €18M, аренда с обязательным выкупом (условие: выход в топ-4), 30% sell-on&#10;Эндрик, ЦФ, 20, Бразилия, Реал Мадрид, €20M, аренда с выкупом, 15% sell-on"></textarea>
-        <div class="row sp" style="margin-top:8px;align-items:center;flex-wrap:wrap;gap:8px">
-          <span class="muted small">💡 Позиция: ВР, ЦЗ, ЛЗ, ПЗ, ОП, ЦП, АП, ЛВ, ПВ, ЦФ · Процент перепродажи от 0% до 90%</span>
+        <textarea id="tr_batch_text" class="eur-tr-batch-text" rows="4" placeholder="Виктор Дьёкереш, ЦФ, 26, Швеция, Спортинг, €65M, покупка, 25% sell-on&#10;Арда Гюлер, АП, 21, Турция, Реал Мадрид, €18M, аренда с обязательным выкупом (условие: выход в топ-4), 30% sell-on&#10;Эндрик, ЦФ, 20, Бразилия, Реал Мадрид, €20M, аренда с выкупом, 15% sell-on"></textarea>
+        <div class="row sp" style="margin-top:10px;align-items:center;flex-wrap:wrap;gap:8px">
+          <span class="muted small">💡 Позиция: ВР, ЦЗ, ЛЗ, ПЗ, ОП, ЦП, АП, ЛВ, ПВ, ЦФ · Sell-on от 0% до 90%</span>
           <button class="btn" id="tr_batch_send" style="background:#1d4ed8;color:#fff">Отправить весь список админу 🚀</button>
         </div>
       </div>
 
-      <div id="tr_list" style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px"></div>
+      <div id="tr_list" style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:12px"></div>
     </div>
   `;
 }
@@ -4322,21 +4395,27 @@ function setupEuropeanTransferHandlers(app, refreshFn) {
     };
   }
 
-  api('/club/transfer-requests').then(r => {
+  const trqUrl = '/club/transfer-requests' + (S.me?.role === 'admin' && CLUB_TID ? '?teamId=' + encodeURIComponent(CLUB_TID) : '');
+  api(trqUrl).then(r => {
     const box = $('#tr_list');
     if (!box) return;
-    const allReqs = r?.requests || [];
+    let allReqs = r?.requests || [];
     if (!allReqs.length) {
       box.innerHTML = '<div class="muted small">Заявок на трансферы из Европы пока нет.</div>';
       return;
     }
     const statusKey = (st) => (st === 'approved' || st === 'rejected') ? st : 'pending';
-    const counts = {
+    const getCounts = () => ({
       pending: allReqs.filter(x => statusKey(x.status) === 'pending').length,
       approved: allReqs.filter(x => statusKey(x.status) === 'approved').length,
       rejected: allReqs.filter(x => statusKey(x.status) === 'rejected').length
-    };
+    });
     const renderClubTrq = () => {
+      if (!allReqs.length) {
+        box.innerHTML = '<div class="muted small">Заявок на трансферы из Европы пока нет.</div>';
+        return;
+      }
+      const counts = getCounts();
       const filtered = allReqs.filter(x => statusKey(x.status) === CLUB_TRQ_TAB);
       const emptyLabel = CLUB_TRQ_TAB === 'approved'
         ? 'Подтверждённых заявок пока нет.'
@@ -4345,13 +4424,14 @@ function setupEuropeanTransferHandlers(app, refreshFn) {
         : 'Ожидающих заявок пока нет.';
       box.innerHTML = `
         <div class="small muted" style="font-weight:700;margin-bottom:8px;color:#334155">Ваши поданные заявки на трансферы из Европы (${allReqs.length}):</div>
-        <div class="tabs" style="margin-bottom:10px">
+        <div class="eur-trq-tabs">
           <button type="button" data-club-trq-tab="pending" class="${CLUB_TRQ_TAB === 'pending' ? 'on' : ''}">⏳ Ожидающие (${counts.pending})</button>
           <button type="button" data-club-trq-tab="approved" class="${CLUB_TRQ_TAB === 'approved' ? 'on' : ''}">✅ Подтверждённые (${counts.approved})</button>
           <button type="button" data-club-trq-tab="rejected" class="${CLUB_TRQ_TAB === 'rejected' ? 'on' : ''}">❌ Отклонённые (${counts.rejected})</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
           ${filtered.length ? filtered.map(x => {
+            const isPending = statusKey(x.status) === 'pending';
             const statusBadge = x.status === 'approved'
               ? '<span class="tag" style="background:#dcfce7;color:#166534;font-weight:700">✅ Одобрено (в составе)</span>'
               : x.status === 'rejected'
@@ -4380,7 +4460,10 @@ function setupEuropeanTransferHandlers(app, refreshFn) {
                   </div>
                   ${x.status === 'rejected' && x.rejectReason ? `<div class="small" style="color:#991b1b;margin-top:4px">Причина: ${e(x.rejectReason)}</div>` : ''}
                 </div>
-                <div>${statusBadge}</div>
+                <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">
+                  ${statusBadge}
+                  ${isPending ? `<button type="button" class="btn alt sm" data-trq-cancel="${x.id}" style="color:#b91c1c;border-color:#fca5a5;background:#fff">Отменить</button>` : ''}
+                </div>
               </div>
             `;
           }).join('') : `<div class="muted small" style="padding:10px 0">${emptyLabel}</div>`}
@@ -4390,6 +4473,19 @@ function setupEuropeanTransferHandlers(app, refreshFn) {
         btn.onclick = () => {
           CLUB_TRQ_TAB = btn.dataset.clubTrqTab;
           renderClubTrq();
+        };
+      });
+      box.querySelectorAll('[data-trq-cancel]').forEach(btn => {
+        btn.onclick = async () => {
+          const reqId = btn.dataset.trqCancel;
+          btn.disabled = true;
+          const res = await act(() => api('/club/transfer-request/cancel', withT({ requestId: reqId })), 'Заявка отменена');
+          if (res) {
+            allReqs = allReqs.filter(item => item.id !== reqId);
+            renderClubTrq();
+          } else {
+            btn.disabled = false;
+          }
         };
       });
     };
@@ -5058,7 +5154,7 @@ async function pgClub(app) {
         <span class="tag">${e(compName(c.team.comp))}</span>
         ${c.team.city ? `<span class="tag">${e(c.team.city)}</span>` : ''}
         ${c.team.stadium ? `<span class="tag">🏟 ${e(c.team.stadium)}</span>` : ''}
-        <span class="tag" style="background:#fef3c7;color:#92400e;font-weight:800">💰 Бюджет: ${e(c.formattedBudget || ('€' + (c.budget || 0).toLocaleString('ru-RU')))}</span>
+        <span class="tag" style="background:${(c.budget || 0) < 0 ? '#fee2e2' : '#fef3c7'};color:${(c.budget || 0) < 0 ? '#991b1b' : '#92400e'};font-weight:800">💰 Бюджет: ${e(c.formattedBudget || ((c.budget || 0) < 0 ? '-€' + Math.abs(Math.round(c.budget || 0)).toLocaleString('ru-RU') : '€' + Math.round(c.budget || 0).toLocaleString('ru-RU')))}</span>
       </div>
       <h1 style="margin:0">${e(c.team.name)}</h1>
     </div>
@@ -5208,7 +5304,6 @@ async function pgClub(app) {
       const actionBtns = mode === 'reg'
         ? `<div class="row" style="gap:4px;flex-wrap:nowrap">
             <button class="btn alt sm" data-reg-out="${p.id}" ${!rw.canEdit ? 'disabled title="Заявка закрыта"' : ''}>Снять с заявки</button>
-            <button class="btn sm" data-terminate="${p.id}" data-pname="${e(p.name)}" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5" title="Разорвать контракт — игрок станет свободным агентом">Разорвать</button>
           </div>`
         : `<div class="row" style="gap:4px;flex-wrap:nowrap">
             ${p.inRegistration
@@ -5268,31 +5363,39 @@ async function pgClub(app) {
     <div class="panel">
       <div class="row sp" style="align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
         <div>
-          <h3 style="margin:0">Добавить игроков в общий состав клуба</h3>
+          <h3 style="margin:0">${isAdmin ? 'Добавить игроков в общий состав клуба' : 'Найти существующего игрока для состава / трансфера'}</h3>
           <p class="muted small" style="margin:4px 0 0">В общем составе клуба нет ограничения по числу игроков и легионеров.</p>
         </div>
+        ${isAdmin ? `
         <div class="row" style="gap:4px">
           <button type="button" class="btn sm on" id="squad_tab_single" style="font-size:12px;padding:4px 10px">👤 По одному</button>
           <button type="button" class="btn sm alt" id="squad_tab_batch" style="font-size:12px;padding:4px 10px">📋 Добавить списком</button>
-        </div>
+        </div>` : ''}
       </div>
 
       <div id="squad_single_wrap">
-        <p class="muted small" style="margin:0 0 8px">Начните вводить фамилию. Если игрока нет в базе, нажмите «Создать и добавить». Игрок из чужого клуба уйдёт на трансферное согласование.</p>
+        <p class="muted small" style="margin:0 0 8px">
+          ${isAdmin
+            ? 'Начните вводить фамилию. Если игрока нет в базе, нажмите «Создать и добавить». Игрок из чужого клуба уйдёт на трансферное согласование.'
+            : 'Начните вводить фамилию и выберите существующего игрока из базы. Игрок из чужого клуба уйдёт на трансферное согласование. Создавать новых игроков может только администратор.'}
+        </p>
         <div class="row">
           <div class="sug" style="flex:1;min-width:240px">
-            <input id="pn" placeholder="Например: Месси" autocomplete="off">
+            <input id="pn" placeholder="Начните вводить фамилию игрока из базы…" autocomplete="off">
             <div class="list" id="pl" hidden></div>
           </div>
+          ${isAdmin ? `
           <select id="pp" style="width:90px">
             <option value="">поз.</option>
             ${Object.keys(gp).map(p => `<option>${p}</option>`).join('')}
           </select>
           <input id="pnat" list="nat_list" placeholder="Страна (по умолчанию Россия)" autocomplete="off" style="width:190px;flex:1 1 150px">
           <button class="btn" id="padd">Создать и добавить</button>
+          ` : ''}
         </div>
       </div>
 
+      ${isAdmin ? `
       <div id="squad_batch_wrap" style="display:none;margin-top:10px">
         <p class="muted small" style="margin:0 0 6px">
           Вставьте список игроков — каждого с новой строки. Можно указать позицию через запятую (например: <code>Александр Соболев, ЦФ</code>) и страну (<code>Лукас Пакета, ЦП, Бразилия</code>). Все игроки попадут в общий состав клуба.
@@ -5302,7 +5405,7 @@ async function pgClub(app) {
           <span class="muted small">💡 Каждый игрок с новой строки</span>
           <button class="btn" id="squad_batch_send" style="background:#2563eb;color:#fff">Добавить весь список в состав 🚀</button>
         </div>
-      </div>
+      </div>` : ''}
       <div style="margin-top:8px">
         <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;margin:0">
           <input type="checkbox" id="padd_auto_reg" style="width:auto" ${rw.canEdit ? 'checked' : 'disabled'}>
@@ -5350,33 +5453,39 @@ async function pgClub(app) {
     </div>
     `;
 
-    $('#squad_tab_single').onclick = () => {
-      $('#squad_tab_single').className = 'btn sm on';
-      $('#squad_tab_batch').className = 'btn sm alt';
-      $('#squad_single_wrap').style.display = 'block';
-      $('#squad_batch_wrap').style.display = 'none';
-    };
-    $('#squad_tab_batch').onclick = () => {
-      $('#squad_tab_batch').className = 'btn sm on';
-      $('#squad_tab_single').className = 'btn sm alt';
-      $('#squad_single_wrap').style.display = 'none';
-      $('#squad_batch_wrap').style.display = 'block';
-      $('#squad_batch_text').focus();
-    };
-    $('#squad_batch_send').onclick = async () => {
-      const text = $('#squad_batch_text').value.trim();
-      if (!text) return toast('Введите хотя бы одного игрока');
-      const btn = $('#squad_batch_send');
-      btn.disabled = true;
-      btn.textContent = 'Обрабатываю список игроков… ⏳';
-      const r = await act(() => api('/club/squad/add-batch', withT({ rawText: text, register: !!$('#padd_auto_reg')?.checked })));
-      btn.disabled = false;
-      btn.textContent = 'Добавить весь список в состав 🚀';
-      if (r && r.ok) {
-        toast(r.message);
-        pgClub(app);
-      }
-    };
+    if ($('#squad_tab_single')) {
+      $('#squad_tab_single').onclick = () => {
+        $('#squad_tab_single').className = 'btn sm on';
+        $('#squad_tab_batch').className = 'btn sm alt';
+        $('#squad_single_wrap').style.display = 'block';
+        $('#squad_batch_wrap').style.display = 'none';
+      };
+    }
+    if ($('#squad_tab_batch')) {
+      $('#squad_tab_batch').onclick = () => {
+        $('#squad_tab_batch').className = 'btn sm on';
+        $('#squad_tab_single').className = 'btn sm alt';
+        $('#squad_single_wrap').style.display = 'none';
+        $('#squad_batch_wrap').style.display = 'block';
+        $('#squad_batch_text').focus();
+      };
+    }
+    if ($('#squad_batch_send')) {
+      $('#squad_batch_send').onclick = async () => {
+        const text = $('#squad_batch_text').value.trim();
+        if (!text) return toast('Введите хотя бы одного игрока');
+        const btn = $('#squad_batch_send');
+        btn.disabled = true;
+        btn.textContent = 'Обрабатываю список игроков… ⏳';
+        const r = await act(() => api('/club/squad/add-batch', withT({ rawText: text, register: !!$('#padd_auto_reg')?.checked })));
+        btn.disabled = false;
+        btn.textContent = 'Добавить весь список в состав 🚀';
+        if (r && r.ok) {
+          toast(r.message);
+          pgClub(app);
+        }
+      };
+    }
 
     let t;
     $('#pn').oninput = () => {
@@ -5398,15 +5507,17 @@ async function pgClub(app) {
       if (r) { r.pending ? toast(r.message) : toast(r.registered ? 'Игрок добавлен в состав и включён в заявку' : 'Игрок добавлен в общий состав'); pgClub(app); }
     };
 
-    $('#padd').onclick = async () => {
-      const n = $('#pn').value.trim();
-      if (!n) return;
-      $('#padd').disabled = true;
-      $('#padd').textContent = 'Создаю карточку…';
-      const r = await act(() => api('/club/squad/add', withT({ name: n, pos: $('#pp').value, nation: $('#pnat').value.trim(), register: !!$('#padd_auto_reg')?.checked })));
-      if (r) { r.pending ? toast(r.message) : toast(r.registered ? 'Игрок добавлен в состав и включён в заявку' : 'Игрок добавлен в общий состав'); pgClub(app); }
-      else { $('#padd').disabled = false; $('#padd').textContent = 'Создать и добавить'; }
-    };
+    if ($('#padd')) {
+      $('#padd').onclick = async () => {
+        const n = $('#pn').value.trim();
+        if (!n) return;
+        $('#padd').disabled = true;
+        $('#padd').textContent = 'Создаю карточку…';
+        const r = await act(() => api('/club/squad/add', withT({ name: n, pos: $('#pp').value, nation: $('#pnat').value.trim(), register: !!$('#padd_auto_reg')?.checked })));
+        if (r) { r.pending ? toast(r.message) : toast(r.registered ? 'Игрок добавлен в состав и включён в заявку' : 'Игрок добавлен в общий состав'); pgClub(app); }
+        else { $('#padd').disabled = false; $('#padd').textContent = 'Создать и добавить'; }
+      };
+    }
 
     cb.querySelectorAll('[data-reg-in]').forEach(b => b.onclick = async () => {
       const r = await act(() => api('/club/registration/toggle', withT({ playerId: b.dataset.regIn, inRegistration: true })));
@@ -5952,6 +6063,9 @@ async function pgClub(app) {
         ${outg.length ? outg.map(t => {
           const isExchange = t.type === 'exchange';
           const isFreeAgent = t.type === 'free_agent';
+          const canCancel = t.status === 'pending'
+            && (t.adminApproval || 'pending') === 'pending'
+            && (isFreeAgent ? true : (t.clubApproval || 'pending') === 'pending');
           return `
             <div class="row sp" style="padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px">
               <div>
@@ -5966,7 +6080,7 @@ async function pgClub(app) {
                 </div>
                 <div class="muted small" style="margin-top:3px">${e(t.note || '')} · Запрос подан: ${e(t.date || '')}</div>
               </div>
-              <div class="row" style="gap:6px;flex-wrap:wrap">
+              <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
                 ${isFreeAgent ? '' : (t.clubApproval === 'approved'
                   ? `<span class="tag" style="background:#dcfce7;color:#166534">✅ Клуб согласился</span>`
                   : t.clubApproval === 'rejected'
@@ -5975,6 +6089,7 @@ async function pgClub(app) {
                 ${t.adminApproval === 'approved'
                   ? `<span class="tag" style="background:#dcfce7;color:#166534">✅ Админ одобрил</span>`
                   : `<span class="tag" style="background:#fef3c7;color:#92400e">⏳ Ожидает админа</span>`}
+                ${canCancel ? `<button type="button" class="btn alt sm" data-cl-cancel="${t.id}" style="color:#b91c1c;border-color:#fca5a5;background:#fff">Отменить</button>` : ''}
               </div>
             </div>
           `;
@@ -6081,6 +6196,13 @@ async function pgClub(app) {
     cb.querySelectorAll('[data-cl-reject]').forEach(b => b.onclick = async () => {
       const r = await act(() => api('/club/transfer/respond', withT({ transferId: b.dataset.clReject, action: 'reject' })), 'Предложение отклонено');
       if (r) pgClub(app);
+    });
+
+    cb.querySelectorAll('[data-cl-cancel]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const r = await act(() => api('/club/transfer/cancel', withT({ transferId: b.dataset.clCancel })), 'Предложение отменено');
+      if (r) pgClub(app);
+      else b.disabled = false;
     });
 
     const typeSelect = $('#cl_tr_type');
@@ -7891,37 +8013,39 @@ async function pgAdmin(app) {
     const rData = await api('/admin/referees');
     const refs = rData.referees || [];
     const assts = rData.assistants || [];
-    const styleNames = { strict: 'Строгий', liberal: 'Либеральный', balanced: 'Сбалансированный', european: 'Европейский', principled: 'Принципиальный' };
     ab.innerHTML = `
       <div class="panel">
         <div class="row sp" style="margin-bottom:10px">
-          <h3 style="margin:0">Судейский корпус</h3>
+          <h3 style="margin:0">Судейский корпус <span class="tag" style="background:#fef3c7;color:#92400e;margin-left:6px">🔒 Видно только администратору</span></h3>
           <button class="btn" id="rf_all_bio">Сделать / обновить портрет всем арбитрам (ИИ)</button>
         </div>
         <div class="row" style="gap:8px;flex-wrap:wrap">
           <input id="rf_name" placeholder="Имя и фамилия" style="flex:2;min-width:180px">
           <input id="rf_city" placeholder="Город" style="flex:1;min-width:120px">
-          <input id="rf_styleDesc" placeholder="Подробный портрет / манера судейства" style="flex:2;min-width:240px">
-          <input id="rf_leagues" value="rpl,cup,friendly" placeholder="Лиги (rpl,fnl,cup,friendly)" style="flex:1;min-width:160px">
+          <input id="rf_bio" placeholder="Портрет арбитра (необязательно)" style="flex:2;min-width:220px">
+          <input id="rf_leagues" value="rpl,cup,friendly" placeholder="Лиги (rpl,fnl,cup,friendly)" style="flex:1;min-width:150px">
           <button class="btn alt" id="rf_add">Добавить судью</button>
         </div>
       </div>
       <div class="panel wrap">
         <h3>Таблица рейтинга главных и резервных арбитров (${refs.length})</h3>
-        <p class="muted small">Рейтинг формируется по симулированным матчам (изначально 0.00). На важные матчи назначаются лучшие арбитры.</p>
+        <p class="muted small">Нажмите на фамилию арбитра или «Профиль», чтобы написать портрет вручную, посмотреть подробный рейтинг за каждый матч, историю отработанных игр и статистику на топовых и слабых матчах (доступно только вам как админу).</p>
         <table>
           <thead><tr><th>#</th><th class="l">Арбитр</th><th class="l">Город</th><th>Матчи</th><th>ЖК</th><th>КК</th><th>Пен.</th><th>Рейтинг</th><th></th></tr></thead>
           <tbody>
             ${refs.map((r, i) => `<tr>
               <td><b>${i + 1}</b></td>
-              <td class="l"><b>${e(r.name)}</b>${r.varRole ? ` <span class="tag">${e(r.varRole)}</span>` : ''}</td>
+              <td class="l">
+                <a href="javascript:void(0)" data-rfp="${r.id}" style="font-weight:700;color:var(--deep);text-decoration:underline;text-underline-offset:3px">${e(r.name)}</a>
+                ${r.varRole ? ` <span class="tag">${e(r.varRole)}</span>` : ''}
+              </td>
               <td class="l">${e(r.city)}</td>
               <td>${r.matches || 0}</td>
               <td>${r.yellows || 0}</td>
               <td>${r.reds || 0}</td>
               <td>${r.penalties || 0}</td>
               <td><b>${Number(r.rating || 0).toFixed(2)}</b></td>
-              <td><button class="btn alt sm" data-rfp="${r.id}">Портфолио</button></td>
+              <td><button class="btn alt sm" data-rfp="${r.id}">Профиль и история</button></td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -7933,10 +8057,10 @@ async function pgAdmin(app) {
           <tbody>
             ${assts.map((a, i) => `<tr>
               <td>${i + 1}</td>
-              <td class="l"><b>${e(a.name)}</b></td>
+              <td class="l"><a href="javascript:void(0)" data-asp="${a.id}" style="font-weight:700;color:var(--deep);text-decoration:underline;text-underline-offset:3px">${e(a.name)}</a></td>
               <td>${a.matches || 0}</td>
               <td><b>${Number(a.rating || 0).toFixed(2)}</b></td>
-              <td><button class="btn alt sm" data-asp="${a.id}">Портфолио</button></td>
+              <td><button class="btn alt sm" data-asp="${a.id}">Портрет / профиль</button></td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -7966,7 +8090,7 @@ async function pgAdmin(app) {
       const r = await act(() => api('/admin/referee', {
         name: $('#rf_name').value,
         city: $('#rf_city').value,
-        styleDesc: $('#rf_styleDesc').value,
+        bio: $('#rf_bio').value,
         rating: 0,
         leagues: $('#rf_leagues').value.split(',').map(s => s.trim()).filter(Boolean)
       }), 'Судья добавлен');
@@ -7975,27 +8099,437 @@ async function pgAdmin(app) {
     ab.querySelectorAll('[data-asp]').forEach(b => b.onclick = () => {
       const a = assts.find(x => x.id === b.dataset.asp);
       if (!a) return;
-      modal(`<h3>Портфолио помощника судьи: ${e(a.name)}</h3>
-        <p><b>Матчи:</b> ${a.matches || 0} · <b>Рейтинг:</b> ${Number(a.rating || 0).toFixed(2)}</p>
-        <p class="muted" style="white-space:pre-line">${e(a.bio || '')}</p>`);
-    });
-    ab.querySelectorAll('[data-rfp]').forEach(b => b.onclick = () => {
-      const r = refs.find(x => x.id === b.dataset.rfp);
-      if (!r) return;
-      const m = modal(`<h3>Портфолио арбитра: ${e(r.name)}</h3>
-        <p><b>Город:</b> ${e(r.city)} · <b>Возраст:</b> ${r.age || 40} лет · <b>Рейтинг (по симуляции):</b> ${Number(r.rating).toFixed(1)}</p>
-        <p><b>Доступные лиги:</b> ${(r.leagues || []).join(', ').toUpperCase()}</p>
-        <p><b>Статистика в симуляторе:</b> Матчи: ${r.matches} · ЖК: ${r.yellows} · КК: ${r.reds} · Пенальти: ${r.penalties}</p>
-        <p id="rf_bio_txt" class="muted" style="white-space:pre-line">${e(r.bio || '')}</p>
-        <div class="row" style="margin-top:12px"><button class="btn" id="rf_gen_bio">Сделать портрет (ИИ)</button></div>`);
-      m.querySelector('#rf_gen_bio').onclick = async () => {
-        const res = await act(() => api('/admin/referee/portfolio', { refereeId: r.id }), 'Портфолио обновлено');
-        if (res) {
-          r.bio = res.bio;
-          m.querySelector('#rf_bio_txt').textContent = res.bio;
-        }
+      const m = modal(`
+        <div class="row sp" style="margin-bottom:8px">
+          <h3 style="margin:0">Профиль помощника судьи: ${e(a.name)}</h3>
+          <button type="button" class="btn alt sm" id="as_close">✕</button>
+        </div>
+        <p class="small"><b>Матчи:</b> ${a.matches || 0} · <b>Рейтинг:</b> ${Number(a.rating || 0).toFixed(2)} <span class="tag" style="background:#fef3c7;color:#92400e">🔒 Только для админа</span></p>
+        <label>Портрет помощника судьи (можно редактировать вручную)</label>
+        <textarea id="as_bio_inp" rows="5" placeholder="Опишите манеру работы ассистента на линии, точность офсайдов, взаимодействие с главным арбитром...">${e(a.bio || '')}</textarea>
+        <div class="row" style="margin-top:12px">
+          <button type="button" class="btn" id="as_save_bio">💾 Сохранить портрет</button>
+        </div>
+      `);
+      m.querySelector('#as_close').onclick = () => m.remove();
+      m.querySelector('#as_save_bio').onclick = async () => {
+        const newBio = m.querySelector('#as_bio_inp').value;
+        const res = await act(() => api('/admin/assistant', { id: a.id, bio: newBio }), 'Портрет помощника сохранён');
+        if (res) a.bio = newBio;
       };
     });
+
+    const openRefereeModal = async (refId) => {
+      const m = modal('<div style="padding:20px;text-align:center" class="muted">Загрузка профиля, истории матчей и аналитики арбитра…</div>');
+      if (m.firstElementChild) m.firstElementChild.style.maxWidth = '900px';
+      let det;
+      try {
+        det = await api('/admin/referee/' + encodeURIComponent(refId) + '/details');
+      } catch (err) {
+        m.remove();
+        toast(err.message || 'Не удалось загрузить профиль арбитра', true);
+        return;
+      }
+      const r = det.referee || {};
+      const history = det.history || [];
+      const rb = det.ratingBreakdown || {};
+      const tc = det.tierComparison || {};
+      const topSt = tc.top || {};
+      const weakSt = tc.weak || {};
+      const midSt = tc.mid || {};
+
+      let activeModalTab = 'profile';
+      let histFilter = 'all';
+      let ratingFilter = 'head';
+
+      const tierBadge = (t, reason) => {
+        if (t === 'top') return `<span class="tag" style="background:#fef2f2;color:#b91c1c;border-color:#fca5a5" title="${e(reason || '')}">🔥 Топовый</span>`;
+        if (t === 'weak') return `<span class="tag" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1" title="${e(reason || '')}">📉 Слабый</span>`;
+        return `<span class="tag" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe" title="${e(reason || '')}">⚖️ Обычный</span>`;
+      };
+
+      const fmtSigned = (v) => {
+        const num = Number(v || 0);
+        return (num > 0 ? '+' : '') + num.toFixed(2);
+      };
+
+      const renderRatingMatches = () => {
+        const list = history.filter(h => ratingFilter === 'head' ? h.roleInMatch === 'head' : true);
+        if (!history.length) {
+          return '<div class="empty">Отработанных матчей пока нет — подробный разбор рейтинга по каждой игре появится после первого проведённого матча.</div>';
+        }
+        if (!list.length) {
+          return '<div class="empty">Матчей в роли главного судьи пока нет. Переключите фильтр на «Все отработанные», чтобы увидеть игры в других ролях.</div>';
+        }
+        return `<div style="display:flex;flex-direction:column;gap:10px">
+          ${list.map(h => {
+            const scoreTxt = `<b>${h.hg} : ${h.ag}</b>${h.pen ? ` <span class="small muted">(пен. ${h.pen[0]}:${h.pen[1]})</span>` : ''}`;
+            if (h.roleInMatch !== 'head') {
+              return `<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#f8fafc">
+                <div class="row sp" style="gap:8px;flex-wrap:wrap;margin-bottom:6px">
+                  <div>
+                    <a href="#/match/${h.fid}" data-close-modal="1" style="font-weight:700;color:var(--deep)">${e(h.homeName)} — ${e(h.awayName)}</a> · ${scoreTxt}
+                    <span class="small muted" style="margin-left:6px">${e(fmtD(h.date || ''))} · ${e(h.label || h.comp)}</span>
+                  </div>
+                  <div class="row" style="gap:6px">
+                    ${tierBadge(h.tier, h.tierReason)}
+                    <span class="tag">${e(h.roleLabel)}</span>
+                    <span class="tag" style="background:#e2e8f0;color:#334155">Δ 0.00</span>
+                  </div>
+                </div>
+                <div class="small muted">${e(h.ratingExplanation || '')}</div>
+              </div>`;
+            }
+            const dVal = Number(h.delta || 0);
+            const dColor = dVal > 0 ? '#15803d' : dVal < 0 ? '#b91c1c' : '#475569';
+            const dBg = dVal > 0 ? '#ecfdf5' : dVal < 0 ? '#fef2f2' : '#f1f5f9';
+            const dBorder = dVal > 0 ? '#86efac' : dVal < 0 ? '#fca5a5' : '#cbd5e1';
+            const beforeNum = Number(h.baseBefore ?? 7.5);
+            const afterNum = Number(h.ratingAfter ?? beforeNum);
+            const unclamped = +(beforeNum + Number(h.rawDelta || 0)).toFixed(2);
+            const formulaStr = `${beforeNum.toFixed(2)} ${Number(h.disciplineDelta) >= 0 ? '+' : '−'} ${Math.abs(Number(h.disciplineDelta || 0)).toFixed(2)} (дисц.) ${Number(h.errorDelta) >= 0 ? '+' : '−'} ${Math.abs(Number(h.errorDelta || 0)).toFixed(2)} (ошибки) ${Number(h.topBonus) >= 0 ? '+' : '−'} ${Math.abs(Number(h.topBonus || 0)).toFixed(2)} (топ) = ${unclamped.toFixed(2)}${h.wasClamped ? ` → ${afterNum.toFixed(2)} (порог)` : ''}`;
+            return `<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff">
+              <div class="row sp" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                <div>
+                  <div>
+                    <a href="#/match/${h.fid}" data-close-modal="1" style="font-weight:700;color:var(--deep);font-size:15px">${e(h.homeName)} — ${e(h.awayName)}</a> · ${scoreTxt}
+                  </div>
+                  <div class="small muted" style="margin-top:2px">
+                    ${e(fmtD(h.date || ''))}${h.time ? ` ${e(h.time)}` : ''} · ${e(h.label || h.comp)} · ${tierBadge(h.tier, h.tierReason)} <span style="margin-left:4px">${e(h.tierReason || '')}</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;background:${dBg};border:1px solid ${dBorder};border-radius:8px;padding:6px 10px">
+                  <span class="small muted">Было <b>${beforeNum.toFixed(2)}</b></span>
+                  <span style="font-weight:800;color:${dColor}">${fmtSigned(dVal)}</span>
+                  <span class="small muted">→ Стало <b style="color:var(--deep);font-size:14px">${afterNum.toFixed(2)}</b></span>
+                </div>
+              </div>
+
+              <div class="small" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 9px;margin-bottom:8px;font-family:monospace">
+                ${e(formulaStr)}${h.estimatedRating ? ' <span class="tag" style="font-family:sans-serif;margin-left:6px">восстановлено по протоколу</span>' : ''}
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-bottom:8px">
+                ${(h.ratingFactors || []).map(f => {
+                  const fv = Number(f.delta || 0);
+                  const fc = fv > 0 ? '#15803d' : fv < 0 ? '#b91c1c' : '#475569';
+                  return `<div style="border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:#fcfcfd">
+                    <div class="row sp" style="margin-bottom:3px">
+                      <b class="small">${e(f.label)}</b>
+                      <b class="small" style="color:${fc}">${fmtSigned(fv)}</b>
+                    </div>
+                    <div class="small muted" style="line-height:1.4">${e(f.reason)}</div>
+                  </div>`;
+                }).join('')}
+              </div>
+
+              <div class="small" style="padding:7px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;color:#14532d">
+                <b>Почему такой рейтинг:</b> ${e(h.ratingExplanation || '')}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      };
+
+      const renderHistoryRows = () => {
+        if (!history.length) {
+          return '<div class="empty">Отработанных матчей пока нет.</div>';
+        }
+        const filtered = history.filter(h => {
+          if (histFilter === 'top') return h.tier === 'top';
+          if (histFilter === 'mid') return h.tier === 'mid';
+          if (histFilter === 'weak') return h.tier === 'weak';
+          if (histFilter === 'head') return h.roleInMatch === 'head';
+          return true;
+        });
+        if (!filtered.length) {
+          return '<div class="empty">По выбранному фильтру отработанных матчей нет.</div>';
+        }
+        return `<div class="wrap"><table>
+          <thead><tr>
+            <th class="l">Дата / Турнир</th>
+            <th class="l">Отработанный матч</th>
+            <th class="l">Роль</th>
+            <th>ЖК</th>
+            <th>КК</th>
+            <th>Пен.</th>
+            <th>Ошибки</th>
+            <th>Рейтинг Δ</th>
+          </tr></thead>
+          <tbody>
+            ${filtered.map(h => {
+              const scoreTxt = `<b>${h.hg} : ${h.ag}</b>${h.pen ? ` <span class="small muted">(пен. ${h.pen[0]}:${h.pen[1]})</span>` : ''}`;
+              const deltaTxt = h.roleInMatch === 'head' && h.delta !== null
+                ? `<b style="color:${h.delta >= 0 ? '#15803d' : '#b91c1c'}">${h.delta >= 0 ? '+' : ''}${Number(h.delta).toFixed(2)}</b>${h.ratingAfter !== null ? `<div class="small muted">→ ${Number(h.ratingAfter).toFixed(2)}</div>` : ''}`
+                : '<span class="muted">—</span>';
+              const eskTxt = h.esk
+                ? `<div class="small" style="margin-top:3px;color:${h.esk.verdict === 'error_confirmed' ? '#b91c1c' : '#1e40af'}">ЭСК: ${e(h.esk.verdictSummary || h.esk.status)}</div>`
+                : '';
+              return `<tr>
+                <td class="l" style="white-space:nowrap">
+                  <div><b>${e(fmtD(h.date || ''))}</b>${h.time ? ` <span class="small muted">${e(h.time)}</span>` : ''}</div>
+                  <div class="small muted">${e(h.label || h.comp)}</div>
+                </td>
+                <td class="l" style="white-space:normal;min-width:210px">
+                  <div><a href="#/match/${h.fid}" data-close-modal="1" style="font-weight:700;color:var(--deep)">${e(h.homeName)} — ${e(h.awayName)}</a> · ${scoreTxt}</div>
+                  <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                    ${tierBadge(h.tier, h.tierReason)}
+                    <span class="small muted">${e(h.tierReason || '')}</span>
+                  </div>
+                  ${eskTxt}
+                </td>
+                <td class="l"><span class="tag">${e(h.roleLabel)}</span></td>
+                <td>${h.yc ?? 0}</td>
+                <td>${h.rc ?? 0}</td>
+                <td>${h.penCount ?? 0}</td>
+                <td>${h.refErr ? `<b style="color:#b91c1c">${h.refErr}</b>` : '0'}</td>
+                <td>${deltaTxt}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table></div>`;
+      };
+
+      const renderModalBody = () => {
+        const box = m.firstElementChild;
+        if (!box) return;
+        box.innerHTML = `
+          <div class="row sp" style="align-items:flex-start;gap:10px;margin-bottom:10px">
+            <div>
+              <div class="row" style="gap:8px;align-items:center">
+                <h3 style="margin:0;font-size:19px">${e(r.name)}</h3>
+                <span class="tag" style="background:#fef3c7;color:#92400e;font-weight:700">🔒 Только для админа</span>
+                ${r.varRole ? `<span class="tag">${e(r.varRole)}</span>` : ''}
+              </div>
+              <div class="small muted" style="margin-top:4px">
+                Город: <b>${e(r.city || '—')}</b> · Возраст: <b>${r.age || 40} лет</b> · Лиги: <b>${(r.leagues || []).join(', ').toUpperCase() || '—'}</b>
+              </div>
+            </div>
+            <button type="button" class="btn alt sm" id="rf_m_close">✕ Закрыть</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-bottom:14px">
+            <div style="background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
+              <div class="small muted">Рейтинг</div>
+              <div style="font-size:18px;font-weight:800;color:var(--deep)">${Number(r.rating || 0).toFixed(2)}</div>
+            </div>
+            <div style="background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
+              <div class="small muted">Отработано матчей</div>
+              <div style="font-size:18px;font-weight:800">${r.matches || 0} <span class="small muted" style="font-weight:500">(${history.length} в истории)</span></div>
+            </div>
+            <div style="background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
+              <div class="small muted">ЖК / КК</div>
+              <div style="font-size:18px;font-weight:800">${r.yellows || 0} / <span style="color:${(r.reds || 0) > 0 ? '#b91c1c' : 'inherit'}">${r.reds || 0}</span></div>
+            </div>
+            <div style="background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
+              <div class="small muted">Пенальти</div>
+              <div style="font-size:18px;font-weight:800">${r.penalties || 0}</div>
+            </div>
+          </div>
+
+          <div class="tabs" id="rf_m_tabs">
+            <button type="button" class="${activeModalTab === 'profile' ? 'on' : ''}" data-mtab="profile">✍️ Портрет и профиль</button>
+            <button type="button" class="${activeModalTab === 'rating' ? 'on' : ''}" data-mtab="rating">⭐ Рейтинг</button>
+            <button type="button" class="${activeModalTab === 'analytics' ? 'on' : ''}" data-mtab="analytics">⚖️ Топ vs Слабые</button>
+            <button type="button" class="${activeModalTab === 'history' ? 'on' : ''}" data-mtab="history">📜 История игр (${history.length})</button>
+          </div>
+
+          <div id="rf_tab_profile" style="display:${activeModalTab === 'profile' ? 'block' : 'none'}">
+            <p class="small muted" style="margin:0 0 8px">Напишите портрет арбитра вручную — этот текст напрямую используется при судействе матчей в симуляторе и виден только вам.</p>
+            <label style="margin-top:4px">Подробный портрет арбитра</label>
+            <textarea id="rf_bio_inp" rows="6" placeholder="Опишите биографию, характер, как держит игру, реакцию на давление трибун, работу с карточками и ВАР...">${e(r.bio || '')}</textarea>
+            <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+              <div style="flex:1;min-width:130px">
+                <label style="margin-top:2px">Город</label>
+                <input id="rf_city_inp" value="${e(r.city || '')}">
+              </div>
+              <div style="width:90px">
+                <label style="margin-top:2px">Возраст</label>
+                <input id="rf_age_inp" type="number" min="22" max="65" value="${r.age || 40}">
+              </div>
+              <div style="width:110px">
+                <label style="margin-top:2px">Рейтинг</label>
+                <input id="rf_rating_inp" type="number" step="0.05" min="0" max="9.9" value="${Number(r.rating || 0).toFixed(2)}">
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label style="margin-top:2px">Роль VAR</label>
+                <input id="rf_varRole_inp" value="${e(r.varRole || '')}" placeholder="ВАР/АВАР или пусто">
+              </div>
+            </div>
+            <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap">
+              <button type="button" class="btn" id="rf_save_btn">💾 Сохранить портрет и профиль</button>
+              <button type="button" class="btn alt" id="rf_gen_bio">✨ Сгенерировать портрет (ИИ)</button>
+            </div>
+          </div>
+
+          <div id="rf_tab_rating" style="display:${activeModalTab === 'rating' ? 'block' : 'none'}">
+            <div class="panel" style="background:#f8fafc;margin-bottom:12px">
+              <h4 style="margin:0 0 8px">🧮 Как именно считается рейтинг арбитра</h4>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px">
+                <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px">
+                  <div class="small muted">Стартовая база</div>
+                  <b>${Number(rb.baseStart ?? r.rating ?? 0).toFixed(2)}</b>
+                </div>
+                <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px">
+                  <div class="small muted">Спокойные игры (+0.10)</div>
+                  <b style="color:#15803d">+${Number(rb.cleanBonus || 0).toFixed(2)}</b>
+                </div>
+                <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px">
+                  <div class="small muted">Напряжённые (+0.05)</div>
+                  <b style="color:#0369a1">+${Number(rb.tenseBonus || 0).toFixed(2)}</b>
+                </div>
+                <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px">
+                  <div class="small muted">Удаления / Ошибки</div>
+                  <b style="color:#b91c1c">${Number((rb.redPenalty || 0) + (rb.errorPenalty || 0)).toFixed(2)}</b>
+                </div>
+                <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px">
+                  <div class="small muted">Бонус за топ-матчи</div>
+                  <b style="color:#7c3aed">+${Number(rb.topBonus || 0).toFixed(2)}</b>
+                </div>
+                <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:8px;padding:8px">
+                  <div class="small muted">Итоговый рейтинг</div>
+                  <b style="color:#166534">${Number(rb.currentRating ?? r.rating ?? 0).toFixed(2)}</b>
+                </div>
+              </div>
+              <div class="small muted" style="margin-bottom:8px">
+                Средние показатели (по ${rb.recordedMatches || 0} отработанным матчам в поле): <b>${rb.averages?.ycPerMatch ?? 0}</b> ЖК/матч · <b>${rb.averages?.rcPerMatch ?? 0}</b> КК/матч · <b>${rb.averages?.penPerMatch ?? 0}</b> пен./матч · <b>${rb.averages?.foulsPerMatch ?? 0}</b> фолов/матч · <b>${rb.averages?.errPerMatch ?? 0}</b> ошибок/матч.
+              </div>
+              <ul class="small" style="margin:0;padding-left:18px;line-height:1.55;color:#334155">
+                ${(rb.formulaRules || []).map(rule => `<li>${e(rule)}</li>`).join('')}
+              </ul>
+            </div>
+
+            <div class="panel" style="background:#fff;margin-bottom:0">
+              <div class="row sp" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                <h4 style="margin:0">📋 Разбор рейтинга по каждой отработанной игре</h4>
+                <div class="row" style="gap:6px" id="rf_rating_filters">
+                  <button type="button" class="btn sm ${ratingFilter === 'head' ? '' : 'alt'}" data-rfm="head">Главным (${history.filter(x => x.roleInMatch === 'head').length})</button>
+                  <button type="button" class="btn sm ${ratingFilter === 'all' ? '' : 'alt'}" data-rfm="all">Все отработанные (${history.length})</button>
+                </div>
+              </div>
+              <div id="rf_rating_body">${renderRatingMatches()}</div>
+            </div>
+          </div>
+
+          <div id="rf_tab_analytics" style="display:${activeModalTab === 'analytics' ? 'block' : 'none'}">
+            <div class="panel" style="background:#fff;margin-bottom:0">
+              <h4 style="margin:0 0 6px">⚖️ Как судит топовые матчи vs слабые матчи</h4>
+              <p class="small" style="margin:0 0 10px;padding:8px 10px;background:#fefce8;border:1px solid #fde047;border-radius:6px;color:#713f12">
+                <b>Вывод:</b> ${e(tc.summary || '')}
+              </p>
+              <div class="grid g2" style="gap:10px">
+                <div style="border:1.5px solid #fecaca;background:#fff5f5;border-radius:8px;padding:12px">
+                  <div class="row sp" style="margin-bottom:6px">
+                    <b style="color:#991b1b">🔥 Топовые матчи</b>
+                    <span class="tag" style="background:#fee2e2;color:#991b1b">${topSt.matches || 0} гл. · ${topSt.otherRoleMatches || 0} ВАР/рез.</span>
+                  </div>
+                  <div class="small" style="line-height:1.55">
+                    <div>ЖК / матч: <b>${topSt.avgYellows ?? 0}</b> (всего ${topSt.yellows || 0})</div>
+                    <div>КК / матч: <b>${topSt.avgReds ?? 0}</b> (всего ${topSt.reds || 0}) · Пен.: <b>${topSt.penalties || 0}</b></div>
+                    <div>Фолы / матч: <b>${topSt.avgFouls ?? 0}</b> · Ошибки: <b style="color:${(topSt.errors || 0) > 0 ? '#b91c1c' : '#15803d'}">${topSt.errors || 0}</b></div>
+                    <div>Ср. дельта рейтинга: <b style="color:${(topSt.avgDelta || 0) >= 0 ? '#15803d' : '#b91c1c'}">${(topSt.avgDelta || 0) >= 0 ? '+' : ''}${Number(topSt.avgDelta || 0).toFixed(2)}</b></div>
+                  </div>
+                  <div class="small muted" style="margin-top:8px;padding-top:8px;border-top:1px solid #fecaca">${e(topSt.assessment || '')}</div>
+                </div>
+                <div style="border:1.5px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:12px">
+                  <div class="row sp" style="margin-bottom:6px">
+                    <b style="color:#1e293b">📉 Слабые / рядовые матчи</b>
+                    <span class="tag" style="background:#e2e8f0;color:#334155">${weakSt.matches || 0} гл. · ${weakSt.otherRoleMatches || 0} ВАР/рез.</span>
+                  </div>
+                  <div class="small" style="line-height:1.55">
+                    <div>ЖК / матч: <b>${weakSt.avgYellows ?? 0}</b> (всего ${weakSt.yellows || 0})</div>
+                    <div>КК / матч: <b>${weakSt.avgReds ?? 0}</b> (всего ${weakSt.reds || 0}) · Пен.: <b>${weakSt.penalties || 0}</b></div>
+                    <div>Фолы / матч: <b>${weakSt.avgFouls ?? 0}</b> · Ошибки: <b style="color:${(weakSt.errors || 0) > 0 ? '#b91c1c' : '#15803d'}">${weakSt.errors || 0}</b></div>
+                    <div>Ср. дельта рейтинга: <b style="color:${(weakSt.avgDelta || 0) >= 0 ? '#15803d' : '#b91c1c'}">${(weakSt.avgDelta || 0) >= 0 ? '+' : ''}${Number(weakSt.avgDelta || 0).toFixed(2)}</b></div>
+                  </div>
+                  <div class="small muted" style="margin-top:8px;padding-top:8px;border-top:1px solid #cbd5e1">${e(weakSt.assessment || '')}</div>
+                </div>
+              </div>
+              <div class="small muted" style="margin-top:8px">Обычных (средних) отработанных матчей в истории: <b>${midSt.matches || 0}</b> (среднее ЖК/матч: ${midSt.avgYellows ?? 0}, КК: ${midSt.reds || 0}, ср. дельта: ${(midSt.avgDelta || 0) >= 0 ? '+' : ''}${Number(midSt.avgDelta || 0).toFixed(2)}).</div>
+            </div>
+          </div>
+
+          <div id="rf_tab_history" style="display:${activeModalTab === 'history' ? 'block' : 'none'}">
+            <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:wrap" id="rf_hist_filters">
+              <button type="button" class="btn sm ${histFilter === 'all' ? '' : 'alt'}" data-hf="all">Все отработанные (${history.length})</button>
+              <button type="button" class="btn sm ${histFilter === 'top' ? '' : 'alt'}" data-hf="top">🔥 Топовые (${history.filter(x => x.tier === 'top').length})</button>
+              <button type="button" class="btn sm ${histFilter === 'mid' ? '' : 'alt'}" data-hf="mid">⚖️ Обычные (${history.filter(x => x.tier === 'mid').length})</button>
+              <button type="button" class="btn sm ${histFilter === 'weak' ? '' : 'alt'}" data-hf="weak">📉 Слабые (${history.filter(x => x.tier === 'weak').length})</button>
+              <button type="button" class="btn sm ${histFilter === 'head' ? '' : 'alt'}" data-hf="head">Только главным (${history.filter(x => x.roleInMatch === 'head').length})</button>
+            </div>
+            <div id="rf_hist_body">${renderHistoryRows()}</div>
+          </div>
+        `;
+
+        box.querySelector('#rf_m_close').onclick = () => m.remove();
+        box.querySelectorAll('[data-mtab]').forEach(btn => {
+          btn.onclick = () => {
+            activeModalTab = btn.dataset.mtab;
+            renderModalBody();
+          };
+        });
+        box.querySelectorAll('[data-rfm]').forEach(btn => {
+          btn.onclick = () => {
+            ratingFilter = btn.dataset.rfm;
+            box.querySelectorAll('[data-rfm]').forEach(x => x.classList.toggle('alt', x.dataset.rfm !== ratingFilter));
+            const rbEl = box.querySelector('#rf_rating_body');
+            if (rbEl) {
+              rbEl.innerHTML = renderRatingMatches();
+              rbEl.querySelectorAll('[data-close-modal]').forEach(lnk => lnk.onclick = () => m.remove());
+            }
+          };
+        });
+        box.querySelectorAll('[data-hf]').forEach(btn => {
+          btn.onclick = () => {
+            histFilter = btn.dataset.hf;
+            box.querySelectorAll('[data-hf]').forEach(x => x.classList.toggle('alt', x.dataset.hf !== histFilter));
+            const hb = box.querySelector('#rf_hist_body');
+            if (hb) {
+              hb.innerHTML = renderHistoryRows();
+              hb.querySelectorAll('[data-close-modal]').forEach(lnk => lnk.onclick = () => m.remove());
+            }
+          };
+        });
+        box.querySelectorAll('[data-close-modal]').forEach(lnk => lnk.onclick = () => m.remove());
+
+        const saveBtn = box.querySelector('#rf_save_btn');
+        if (saveBtn) {
+          saveBtn.onclick = async () => {
+            const payload = {
+              id: r.id,
+              name: r.name,
+              bio: box.querySelector('#rf_bio_inp').value,
+              city: box.querySelector('#rf_city_inp').value,
+              age: box.querySelector('#rf_age_inp').value,
+              rating: box.querySelector('#rf_rating_inp').value,
+              varRole: box.querySelector('#rf_varRole_inp').value
+            };
+            const res = await act(() => api('/admin/referee', payload), 'Портрет и профиль арбитра сохранены');
+            if (res && res.referee) {
+              Object.assign(r, res.referee);
+              if (rb) rb.currentRating = Number(r.rating || 0);
+              renderModalBody();
+              re();
+            }
+          };
+        }
+        const genBtn = box.querySelector('#rf_gen_bio');
+        if (genBtn) {
+          genBtn.onclick = async () => {
+            const res = await act(() => api('/admin/referee/portfolio', { refereeId: r.id }), 'Портфолио сгенерировано и сохранено');
+            if (res) {
+              r.bio = res.bio;
+              const ta = box.querySelector('#rf_bio_inp');
+              if (ta) ta.value = res.bio;
+            }
+          };
+        }
+      };
+
+      renderModalBody();
+    };
+
+    ab.querySelectorAll('[data-rfp]').forEach(b => b.onclick = () => openRefereeModal(b.dataset.rfp));
   }
   else if (AT === 'coaches') {
     const cData = await api('/admin/coaches');
@@ -9434,8 +9968,8 @@ async function pgAdmin(app) {
                     </td>
                     <td class="l"><span class="tag">${e(t.comp.toUpperCase())}</span></td>
                     <td class="l small muted">${e(t.city || '')} ${t.stadium ? `· ${e(t.stadium)}` : ''}</td>
-                    <td style="font-size:15px;font-weight:800;color:#15803d">
-                      €${(t.budget || 0).toLocaleString('ru-RU')}
+                    <td style="font-size:15px;font-weight:800;color:${(t.budget || 0) < 0 ? '#b91c1c' : '#15803d'}">
+                      ${(t.budget || 0) < 0 ? '-€' + Math.abs(Math.round(t.budget || 0)).toLocaleString('ru-RU') : '€' + Math.round(t.budget || 0).toLocaleString('ru-RU')}
                     </td>
                     <td>
                       <button class="btn sm alt" data-edit-team="${t.id}" data-team-name="${e(t.name)}" data-team-budget="${t.budget || 0}">
@@ -11864,14 +12398,20 @@ function startDrawFromWarmup(app) {
 // Остановка прямого эфира администратором
 async function stopBroadcastByAdmin(app) {
   try {
-    await api('/admin/draw/stop');
+    await api('/admin/draw/stop', {});
+    if (DRAW_CTX.timer) { clearInterval(DRAW_CTX.timer); DRAW_CTX.timer = null; }
+    if (DRAW_CTX.warmupTimer) { clearInterval(DRAW_CTX.warmupTimer); DRAW_CTX.warmupTimer = null; }
+    if (DRAW_CTX.postdrawTimer) { clearInterval(DRAW_CTX.postdrawTimer); DRAW_CTX.postdrawTimer = null; }
+    DRAW_CTX.auto = false;
+    DRAW_CTX.warmupAuto = false;
+    DRAW_CTX.postdrawAuto = false;
     if (!S.st) S.st = {};
     if (S.st.liveDraw) S.st.liveDraw.active = false;
     drawChrome();
     toast('🏁 Трансляция завершена. Вкладка скрыта у обычных пользователей.');
     renderAdminDrawLaunch(app);
   } catch (err) {
-    toast('Ошибка остановки: ' + err.message);
+    toast('Ошибка остановки: ' + err.message, true);
   }
 }
 

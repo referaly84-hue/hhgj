@@ -3382,6 +3382,46 @@ function getFixtureTourKey(f) {
   }
   return `${s}:${f.comp}:${f.round || 1}`;
 }
+function getTeamPowerScore(tid) {
+  const ps = (db?.players || []).filter((p) => p.teamId === tid);
+  if (!ps.length) return 70;
+  return ps.reduce((s, p) => s + (p.rating || 70), 0) / ps.length;
+}
+function classifyMatchTier(f) {
+  if (!f) return { tier: "mid", label: "Обычный матч", reason: "Стандартный матч" };
+  const isDerby = (db?.derbies || []).some((x) => (x.a === f.home && x.b === f.away) || (x.a === f.away && x.b === f.home));
+  const isCupDecisive = f.comp === "cup" && (f.cupStage === "final" || f.cupStage === "semi" || f.cupStage === "quarter" || /финал|полуфинал|1\/2|1\/4/i.test(f.label || ""));
+  const rplTeams = (db?.teams || []).filter((t) => t.comp === "rpl");
+  const pool = rplTeams.length >= 6 ? rplTeams : (db?.teams || []);
+  const ranked = [...pool].map((t) => ({ id: t.id, pow: getTeamPowerScore(t.id) })).sort((a, b) => b.pow - a.pow);
+  const topCount = Math.max(4, Math.min(6, Math.floor(ranked.length * 0.375) || 6));
+  const botCount = Math.max(4, Math.min(6, Math.floor(ranked.length * 0.375) || 6));
+  const topIds = new Set(ranked.slice(0, topCount).map((x) => x.id));
+  const bottomIds = new Set(ranked.slice(-botCount).map((x) => x.id));
+  const pH = getTeamPowerScore(f.home);
+  const pA = getTeamPowerScore(f.away);
+  const avgPow = (pH + pA) / 2;
+  const topCut = ranked[Math.max(0, topCount - 1)]?.pow ?? 74;
+  const botCut = ranked[Math.max(0, ranked.length - botCount)]?.pow ?? 70;
+  if (isDerby) {
+    return { tier: "top", label: "Топовый матч", reason: "Принципиальное дерби", avgPower: +avgPow.toFixed(1) };
+  }
+  if (isCupDecisive) {
+    return { tier: "top", label: "Топовый матч", reason: "Решающая стадия Кубка", avgPower: +avgPow.toFixed(1) };
+  }
+  if (topIds.has(f.home) && topIds.has(f.away)) {
+    return { tier: "top", label: "Топовый матч", reason: "Очный матч лидеров", avgPower: +avgPow.toFixed(1) };
+  }
+  if ((topIds.has(f.home) || topIds.has(f.away)) && avgPow >= topCut) {
+    return { tier: "top", label: "Топовый матч", reason: "Матч высокой статусности", avgPower: +avgPow.toFixed(1) };
+  }
+  const tH = team(f.home);
+  const tA = team(f.away);
+  if (f.comp === "fnl" || (tH?.comp === "fnl" && tA?.comp === "fnl") || (!topIds.has(f.home) && !topIds.has(f.away) && (bottomIds.has(f.home) || bottomIds.has(f.away) || avgPow <= botCut))) {
+    return { tier: "weak", label: "Слабый матч", reason: "Матч команд нижней части / низкого рейтинга", avgPower: +avgPow.toFixed(1) };
+  }
+  return { tier: "mid", label: "Обычный матч", reason: "Стандартный матч тура", avgPower: +avgPow.toFixed(1) };
+}
 function assignTourReferees(tourList) {
   const validMatches = tourList.filter((f) => f.comp === "rpl" || f.comp === "cup");
   const invalidMatches = tourList.filter((f) => f.comp !== "rpl" && f.comp !== "cup");
@@ -3398,16 +3438,11 @@ function assignTourReferees(tourList) {
   const comp = validMatches[0].comp;
   let eligible = db.referees.filter((r) => !r.leagues || r.leagues.includes(comp));
   if (!eligible.length) eligible = db.referees;
-  const teamPower = (tid) => {
-    const ps = db.players.filter((p) => p.teamId === tid);
-    if (!ps.length) return 70;
-    return ps.reduce((s, p) => s + (p.rating || 70), 0) / ps.length;
-  };
   const sortedMatches = [...validMatches].sort((a, b) => {
     const aDerby = db.derbies?.some((x) => x.a === a.home && x.b === a.away || x.a === a.away && x.b === a.home) ? 1 : 0;
     const bDerby = db.derbies?.some((x) => x.a === b.home && x.b === b.away || x.a === b.away && x.b === b.home) ? 1 : 0;
     if (bDerby !== aDerby) return bDerby - aDerby;
-    return teamPower(b.home) + teamPower(b.away) - (teamPower(a.home) + teamPower(a.away));
+    return getTeamPowerScore(b.home) + getTeamPowerScore(b.away) - (getTeamPowerScore(a.home) + getTeamPowerScore(a.away));
   });
   for (const f of sortedMatches) {
     let pool2 = eligible.filter((r) => !usedHeadIds.has(r.id));
@@ -3468,20 +3503,66 @@ function assignReferee(f, siblingList) {
   const siblings = validSiblings.filter((x) => x.id !== f.id && getFixtureTourKey(x) === tourKey);
   assignTourReferees([f, ...siblings]);
 }
+function computeRefereeMatchEval(f, events = []) {
+  const yc = events.length ? events.filter((e) => e.type === "yellow").length : ((f.st?.home?.yc || 0) + (f.st?.away?.yc || 0));
+  const rc = events.length ? events.filter((e) => e.type === "red").length : ((f.st?.home?.rc || 0) + (f.st?.away?.rc || 0));
+  const pen = events.length ? events.filter((e) => e.type === "pen_goal" || e.type === "pen_miss" || e.type === "penalty").length : ((f.st?.home?.penF || 0) + (f.st?.away?.penF || 0));
+  const fouls = events.length ? events.filter((e) => e.type === "foul").length : ((f.st?.home?.fo || 0) + (f.st?.away?.fo || 0));
+  const refErr = events.length ? events.filter((e) => e.type === "ref_error").length : ((f.st?.home?.refF || 0) + (f.st?.away?.refF || 0));
+  const varChecks = events.length ? events.filter((e) => e.type === "var").length : 0;
+  const tierInfo = classifyMatchTier(f);
+  const disciplineDelta = yc <= 4 && rc === 0 ? 0.1 : rc > 0 ? -0.1 : 0.05;
+  const errorDelta = refErr > 0 ? +(-0.15 * refErr).toFixed(2) : 0;
+  const topBonus = tierInfo.tier === "top" && rc === 0 && refErr === 0 ? 0.05 : 0;
+  return { yc, rc, pen, fouls, refErr, varChecks, tierInfo, disciplineDelta, errorDelta, topBonus };
+}
 function updateRefereeStats(f, events = []) {
   if (!f?.refereeId || !db?.referees) return;
   const r = db.referees.find((x) => x.id === f.refereeId);
   if (!r) return;
-  const yc = events.filter((e) => e.type === "yellow").length;
-  const rc = events.filter((e) => e.type === "red").length;
-  const pen = events.filter((e) => e.type === "pen_goal" || e.type === "pen_miss").length;
+  const ev = computeRefereeMatchEval(f, events);
   r.matches = (r.matches || 0) + 1;
-  r.yellows = (r.yellows || 0) + yc;
-  r.reds = (r.reds || 0) + rc;
-  r.penalties = (r.penalties || 0) + pen;
-  const base = r.rating > 0 ? r.rating : 7.5;
-  const delta = yc <= 4 && rc === 0 ? 0.1 : rc > 0 ? -0.1 : 0.05;
-  r.rating = Math.min(9.9, Math.max(5.5, +(base + delta).toFixed(1)));
+  r.yellows = (r.yellows || 0) + ev.yc;
+  r.reds = (r.reds || 0) + ev.rc;
+  r.penalties = (r.penalties || 0) + ev.pen;
+  const base = r.rating > 0 ? Number(r.rating) : 7.5;
+  const rawNext = base + ev.disciplineDelta + ev.errorDelta + ev.topBonus;
+  const nextRating = Math.min(9.9, Math.max(5.5, +rawNext.toFixed(2)));
+  const delta = +(nextRating - base).toFixed(2);
+  r.rating = nextRating;
+  if (!Array.isArray(r.ratingHistory)) r.ratingHistory = [];
+  const histEntry = {
+    fid: f.id,
+    season: f.season || S(),
+    date: f.date || "",
+    label: f.label || `${(f.comp || "").toUpperCase()} тур ${f.round || ""}`,
+    comp: f.comp,
+    home: f.home,
+    away: f.away,
+    homeName: tn(f.home),
+    awayName: tn(f.away),
+    hg: f.hg,
+    ag: f.ag,
+    tier: ev.tierInfo.tier,
+    tierLabel: ev.tierInfo.label,
+    tierReason: ev.tierInfo.reason,
+    yc: ev.yc,
+    rc: ev.rc,
+    pen: ev.pen,
+    fouls: ev.fouls,
+    refErr: ev.refErr,
+    varChecks: ev.varChecks,
+    baseBefore: +base.toFixed(2),
+    disciplineDelta: ev.disciplineDelta,
+    errorDelta: ev.errorDelta,
+    topBonus: ev.topBonus,
+    delta,
+    ratingAfter: nextRating,
+    at: Date.now()
+  };
+  const idx = r.ratingHistory.findIndex((x) => x.fid === f.id);
+  if (idx >= 0) r.ratingHistory[idx] = histEntry;
+  else r.ratingHistory.push(histEntry);
   if (Array.isArray(f.assistants) && db.assistants) {
     for (const aname of f.assistants) {
       const a = db.assistants.find((x) => x.name === aname);
@@ -4135,7 +4216,7 @@ function executeTransferIfBothApproved(t) {
         const feeEuros = Math.round(feeAmt * 1e6);
         if (buyer) {
           const prev = buyer.budget || 0;
-          buyer.budget = Math.max(0, prev - feeEuros);
+          buyer.budget = prev - feeEuros;
           if (!Array.isArray(db.budgetHistory)) db.budgetHistory = [];
           db.budgetHistory.push({
             id: uid(),
@@ -5905,8 +5986,6 @@ async function buildCtx(f) {
   const headRef = db.referees?.find((r) => r.id === f.refereeId || r.name === f.refereeName) || (f.refereeName ? {
     name: f.refereeName,
     city: "\u0420\u043E\u0441\u0441\u0438\u044F",
-    style: "balanced",
-    styleDesc: "\u041F\u043E\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0430\u0440\u0431\u0438\u0442\u0440, \u0434\u0435\u0440\u0436\u0438\u0442 \u0434\u0438\u0441\u0446\u0438\u043F\u043B\u0438\u043D\u0443",
     rating: 7.5,
     bio: `\u0413\u043B\u0430\u0432\u043D\u044B\u0439 \u0430\u0440\u0431\u0438\u0442\u0440 \u0432\u0441\u0442\u0440\u0435\u0447\u0438 \u2014 ${f.refereeName}`,
     matches: 0,
@@ -5916,13 +5995,12 @@ async function buildCtx(f) {
   } : null);
   const varRef = db.referees?.find((r) => r.name === f.varReferee) || (f.varReferee ? {
     name: f.varReferee,
-    style: "\u0412\u0410\u0420-\u0430\u0440\u0431\u0438\u0442\u0440",
-    styleDesc: "\u041E\u043F\u044B\u0442\u043D\u044B\u0439 \u0432\u0438\u0434\u0435\u043E\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 VAR",
     bio: `\u0410\u0440\u0431\u0438\u0442\u0440 VAR \u2014 ${f.varReferee}`
   } : null);
   const assts = Array.isArray(f.assistants) && f.assistants.length >= 2 ? f.assistants : ["\u0414\u043C\u0438\u0442\u0440\u0438\u0439 \u041C\u043E\u0441\u044F\u043A\u0438\u043D", "\u0412\u0430\u043B\u0435\u043D\u0442\u0438\u043D \u041C\u0443\u0440\u0430\u0448\u043E\u0432"];
   ctx.refereeCrew = {
     head: headRef,
+    matchTier: classifyMatchTier(f),
     asst1: assts[0],
     asst2: assts[1],
     fourth: f.reserveReferee || "\u0412\u0435\u0440\u0430 \u041E\u043F\u0435\u0439\u043A\u0438\u043D\u0430",
@@ -5997,15 +6075,14 @@ function buildUser(ctx, a, b, st, issues, mode = "full") {
     const rc = ctx.refereeCrew;
     if (!rc || !rc.head) return "\u0421\u0443\u0434\u0435\u0439\u0441\u043A\u0430\u044F \u0431\u0440\u0438\u0433\u0430\u0434\u0430: \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435 \u043D\u0430 \u043C\u0430\u0442\u0447 \u0441\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u043E\u0435.";
     const h = rc.head;
-    let s = `\u0413\u043B\u0430\u0432\u043D\u044B\u0439 \u0441\u0443\u0434\u044C\u044F: ${h.name} (${h.city || "\u0420\u0424"}, \u0440\u0435\u0439\u0442\u0438\u043D\u0433 ${h.rating || 7.5}/10, \u0441\u0442\u0438\u043B\u044C: ${h.style || "\u0441\u0431\u0430\u043B\u0430\u043D\u0441\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439"}).
-  \u041C\u0430\u043D\u0435\u0440\u0430 \u0441\u0443\u0434\u0435\u0439\u0441\u0442\u0432\u0430: ${h.styleDesc || h.bio || "\u0434\u0435\u0440\u0436\u0438\u0442 \u0438\u0433\u0440\u0443 \u043F\u043E\u0434 \u043A\u043E\u043D\u0442\u0440\u043E\u043B\u0435\u043C"}. \u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430: ${h.matches || 0} \u043C\u0430\u0442\u0447\u0435\u0439, ${h.yellows || 0} \u0416\u041A, ${h.reds || 0} \u041A\u041A, ${h.penalties || 0} \u043F\u0435\u043D\u0430\u043B\u044C\u0442\u0438.`;
+    let s = `\u0413\u043B\u0430\u0432\u043D\u044B\u0439 \u0441\u0443\u0434\u044C\u044F: ${h.name} (${h.city || "\u0420\u0424"}, \u0440\u0435\u0439\u0442\u0438\u043D\u0433 ${h.rating || 7.5}/10).${h.bio ? `\n  Портрет арбитра: ${h.bio}` : ""} \u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430: ${h.matches || 0} \u043C\u0430\u0442\u0447\u0435\u0439, ${h.yellows || 0} \u0416\u041A, ${h.reds || 0} \u041A\u041A, ${h.penalties || 0} \u043F\u0435\u043D\u0430\u043B\u044C\u0442\u0438.`;
     s += `
   \u041F\u043E\u043C\u043E\u0449\u043D\u0438\u043A\u0438 \u043D\u0430 \u043B\u0438\u043D\u0438\u044F\u0445: 1-\u0439 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u2014 ${rc.asst1}, 2-\u0439 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u2014 ${rc.asst2}.`;
     s += `
   \u0420\u0435\u0437\u0435\u0440\u0432\u043D\u044B\u0439 \u0430\u0440\u0431\u0438\u0442\u0440: ${rc.fourth}.`;
     if (rc.var) {
       s += `
-  \u0412\u0438\u0434\u0435\u043E\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442\u044B (VAR): \u0413\u043B\u0430\u0432\u043D\u044B\u0439 \u0412\u0410\u0420 \u2014 ${rc.var}${rc.varProfile ? ` (${rc.varProfile.styleDesc || "\u043E\u043F\u044B\u0442\u043D\u044B\u0439 \u0432\u0438\u0434\u0435\u043E\u0441\u0443\u0434\u044C\u044F"})` : ""}, \u0410\u0412\u0410\u0420 \u2014 ${rc.avar || "\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0412\u0410\u0420"}.`;
+  \u0412\u0438\u0434\u0435\u043E\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442\u044B (VAR): \u0413\u043B\u0430\u0432\u043D\u044B\u0439 \u0412\u0410\u0420 \u2014 ${rc.var}, \u0410\u0412\u0410\u0420 \u2014 ${rc.avar || "\u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0412\u0410\u0420"}.`;
     }
     return s;
   };
@@ -8848,7 +8925,7 @@ var pubTeam = (t) => {
     coach,
     staff,
     budget: t.budget || 0,
-    formattedBudget: "€" + (t.budget || 0).toLocaleString("ru-RU")
+    formattedBudget: (t.budget || 0) < 0 ? "-€" + Math.abs(Math.round(t.budget || 0)).toLocaleString("ru-RU") : "€" + Math.round(t.budget || 0).toLocaleString("ru-RU")
   };
 };
 var pubPlayer = (p) => ({
@@ -11219,7 +11296,7 @@ app.get("/api/club", needClub, (req, res) => {
     foreignOffers: (db.foreignOffers || []).filter((o) => o.clubId === req.tid && o.status === "pending"),
     foreignHistory: (db.foreignOffers || []).filter((o) => o.clubId === req.tid && o.status !== "pending").slice(-10).reverse(),
     budget: t.budget || 0,
-    formattedBudget: "\u20AC" + (t.budget || 0).toLocaleString("ru-RU"),
+    formattedBudget: (t.budget || 0) < 0 ? "-\u20AC" + Math.abs(Math.round(t.budget || 0)).toLocaleString("ru-RU") : "\u20AC" + Math.round(t.budget || 0).toLocaleString("ru-RU"),
     budgetHistory: (Array.isArray(db.budgetHistory) ? db.budgetHistory : []).filter((h) => h.teamId === req.tid).slice(-20).reverse(),
     friendly: friendlyForClub(req.tid)
   });
@@ -11240,6 +11317,9 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
     if (req.body.playerId) {
       p = player(req.body.playerId);
     } else {
+      if (req.me?.role !== "admin") {
+        return fail(res, "Создавать новых игроков может только администратор. Выберите существующего игрока из базы.", 403);
+      }
       [p] = await createPlayers([req.body.name], null, req.body.hint);
       if (p && req.body.pos && POSES.includes(req.body.pos) && !p.verified) p.pos = req.body.pos;
     }
@@ -11350,6 +11430,9 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
 });
 app.post("/api/club/squad/add-batch", needClub, async (req, res) => {
   try {
+    if (req.me?.role !== "admin") {
+      return fail(res, "Создавать и массово добавлять игроков списком может только администратор.", 403);
+    }
     let items = [];
     if (Array.isArray(req.body.players)) {
       items = req.body.players;
@@ -11496,6 +11579,33 @@ app.post("/api/club/transfer/respond", needClub, (req, res) => {
     save();
     return res.json({ ok: 1, rejected: true, message: `\u0412\u044B \u043E\u0442\u043A\u043B\u043E\u043D\u0438\u043B\u0438 \u0441\u0434\u0435\u043B\u043A\u0443 \u043F\u043E \u0438\u0433\u0440\u043E\u043A\u0443 ${t.playerName}.` });
   }
+});
+app.post("/api/club/transfer/cancel", needClub, (req, res) => {
+  const transferId = String(req.body?.transferId || "").trim();
+  if (!transferId) return fail(res, "Укажите трансфер для отмены");
+  const list = db.transfers || [];
+  const idx = list.findIndex((x) => x.id === transferId);
+  if (idx === -1) return fail(res, "Заявка на трансфер не найдена", 404);
+  const t = list[idx];
+  if (t.to !== req.tid) {
+    return fail(res, "Вы можете отменять только исходящие предложения вашего клуба", 403);
+  }
+  if (t.status !== "pending") {
+    return fail(res, "Заявка уже закрыта или обработана");
+  }
+  const clubPending = t.type === "free_agent" ? true : (t.clubApproval || "pending") === "pending";
+  const adminPending = (t.adminApproval || "pending") === "pending";
+  if (!clubPending || !adminPending) {
+    return fail(res, "Нельзя отменить заявку: по ней уже поступил ответ от клуба или администратора");
+  }
+  list.splice(idx, 1);
+  save();
+  return res.json({
+    ok: 1,
+    cancelled: true,
+    transferId,
+    message: `Исходящее предложение по игроку ${t.playerName || "игроку"} отменено.`
+  });
 });
 app.post("/api/club/foreign-offer/respond", needClub, (req, res) => {
   const { offerId, action, comment } = req.body;
@@ -13029,7 +13139,7 @@ app.get("/api/admin/budgets", admin, (req, res) => {
       stadium: t.stadium,
       logo: teamLogo(t.id),
       budget: t.budget || 0,
-      formattedBudget: "\u20AC" + (t.budget || 0).toLocaleString("ru-RU")
+      formattedBudget: (t.budget || 0) < 0 ? "-\u20AC" + Math.abs(Math.round(t.budget || 0)).toLocaleString("ru-RU") : "\u20AC" + Math.round(t.budget || 0).toLocaleString("ru-RU")
     })).sort((a, b) => {
       if (a.comp === "rpl" && b.comp !== "rpl") return -1;
       if (a.comp !== "rpl" && b.comp === "rpl") return 1;
@@ -13250,7 +13360,7 @@ app.post("/api/admin/referees/portfolios-all", admin, async (req, res) => {
     }
   }
   for (const r of refs) {
-    r.bio = `${r.name} (${r.city}) \u2014 ${r.role || "\u0433\u043B\u0430\u0432\u043D\u044B\u0439 \u0430\u0440\u0431\u0438\u0442\u0440"}. \u0412 \u043F\u043E\u043B\u0435: ${r.styleDesc || r.style}. ${r.varRole ? "\u0410\u043A\u0442\u0438\u0432\u043D\u043E \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u043D\u0430 \u0412\u0410\u0420 \u0438 \u0410\u0412\u0410\u0420, \u043E\u043F\u0435\u0440\u0430\u0442\u0438\u0432\u043D\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u0442 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u044D\u043F\u0438\u0437\u043E\u0434\u044B \u0432 \u0448\u0442\u0440\u0430\u0444\u043D\u043E\u0439." : "\u0421\u043F\u0435\u0446\u0438\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u043D\u0430 \u0440\u0430\u0431\u043E\u0442\u0435 \u0432 \u043F\u043E\u043B\u0435."}`;
+    r.bio = `${r.name} (${r.city}) \u2014 ${r.role || "\u0433\u043B\u0430\u0432\u043D\u044B\u0439 \u0430\u0440\u0431\u0438\u0442\u0440"}. ${r.varRole ? "\u0410\u043A\u0442\u0438\u0432\u043D\u043E \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u043D\u0430 \u0412\u0410\u0420 \u0438 \u0410\u0412\u0410\u0420, \u043E\u043F\u0435\u0440\u0430\u0442\u0438\u0432\u043D\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u0442 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u044D\u043F\u0438\u0437\u043E\u0434\u044B \u0432 \u0448\u0442\u0440\u0430\u0444\u043D\u043E\u0439." : "\u0421\u043F\u0435\u0446\u0438\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u043D\u0430 \u0440\u0430\u0431\u043E\u0442\u0435 \u0432 \u043F\u043E\u043B\u0435."}`;
   }
   for (const a of assts) {
     a.bio = `${a.name} \u2014 \u043A\u0432\u0430\u043B\u0438\u0444\u0438\u0446\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u043F\u043E\u043C\u043E\u0449\u043D\u0438\u043A \u0441\u0443\u0434\u044C\u0438 \u0420\u041F\u041B. \u041E\u0442\u043B\u0438\u0447\u0430\u0435\u0442\u0441\u044F \u0432\u044B\u0441\u043E\u043A\u043E\u0439 \u043A\u043E\u043D\u0446\u0435\u043D\u0442\u0440\u0430\u0446\u0438\u0435\u0439 \u043F\u0440\u0438 \u0444\u0438\u043A\u0441\u0430\u0446\u0438\u0438 \u043E\u0444\u0441\u0430\u0439\u0434\u043E\u0432 \u0438 \u0447\u0451\u0442\u043A\u0438\u043C \u0432\u0437\u0430\u0438\u043C\u043E\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435\u043C \u0441 \u0433\u043B\u0430\u0432\u043D\u044B\u043C \u0430\u0440\u0431\u0438\u0442\u0440\u043E\u043C.`;
@@ -13258,41 +13368,320 @@ app.post("/api/admin/referees/portfolios-all", admin, async (req, res) => {
   save();
   res.json({ ok: 1, count: refs.length + assts.length });
 });
+app.get("/api/admin/referee/:id/details", admin, (req, res) => {
+  const r = (db.referees || []).find((x) => x.id === req.params.id);
+  if (!r) return fail(res, "\u0421\u0443\u0434\u044C\u044F \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
+  const histMap = new Map((r.ratingHistory || []).map((h) => [h.fid, h]));
+  const eskByFid = new Map();
+  for (const c of db.eskCases || []) {
+    if (c.fixtureId || c.matchId) eskByFid.set(c.fixtureId || c.matchId, c);
+  }
+  const allFx = db.fixtures || [];
+  const history = [];
+  for (const f of allFx) {
+    if (f.status !== "done") continue;
+    let roleInMatch = null;
+    let roleLabel = "";
+    if (f.refereeId === r.id || f.refereeName === r.name) {
+      roleInMatch = "head";
+      roleLabel = "Главный судья";
+    } else if (f.varReferee === r.name) {
+      roleInMatch = "var";
+      roleLabel = "VAR";
+    } else if (f.avarReferee === r.name) {
+      roleInMatch = "avar";
+      roleLabel = "AVAR";
+    } else if (f.reserveReferee === r.name) {
+      roleInMatch = "reserve";
+      roleLabel = "Резервный";
+    }
+    if (!roleInMatch) continue;
+    const tierInfo = classifyMatchTier(f);
+    const stored = histMap.get(f.id);
+    const matchObj = getMatch(f.id);
+    const evalStats = stored || computeRefereeMatchEval(f, matchObj?.events || []);
+    const eskCase = eskByFid.get(f.id) || (db.eskCases || []).find((c) => c.refereeName === r.name && (c.matchTitle || "").includes(tn(f.home)) && (c.matchTitle || "").includes(tn(f.away)));
+    const yc = evalStats.yc || 0;
+    const rc = evalStats.rc || 0;
+    const penCount = evalStats.pen || 0;
+    const fouls = evalStats.fouls || 0;
+    const refErr = evalStats.refErr || 0;
+    const varChecks = evalStats.varChecks || 0;
+    const disciplineDelta = stored?.disciplineDelta ?? evalStats.disciplineDelta ?? 0;
+    const errorDelta = stored?.errorDelta ?? evalStats.errorDelta ?? 0;
+    const topBonus = stored?.topBonus ?? evalStats.topBonus ?? 0;
+    const rawDelta = +(disciplineDelta + errorDelta + topBonus).toFixed(2);
+    const delta = stored?.delta ?? rawDelta;
+    history.push({
+      fid: f.id,
+      season: f.season || S(),
+      comp: f.comp,
+      round: f.round || null,
+      label: f.label || `${(f.comp || "").toUpperCase()} тур ${f.round || ""}`,
+      date: f.date || "",
+      time: f.time || "",
+      status: f.status,
+      homeId: f.home,
+      awayId: f.away,
+      homeName: tn(f.home),
+      awayName: tn(f.away),
+      homeLogo: teamLogo(f.home),
+      awayLogo: teamLogo(f.away),
+      hg: f.hg,
+      ag: f.ag,
+      pen: f.pen || null,
+      roleInMatch,
+      roleLabel,
+      tier: stored?.tier || tierInfo.tier,
+      tierLabel: stored?.tierLabel || tierInfo.label,
+      tierReason: stored?.tierReason || tierInfo.reason,
+      avgPower: tierInfo.avgPower || null,
+      yc,
+      rc,
+      penCount,
+      fouls,
+      refErr,
+      varChecks,
+      disciplineDelta,
+      errorDelta,
+      topBonus,
+      rawDelta,
+      delta,
+      baseBefore: stored?.baseBefore ?? null,
+      ratingAfter: stored?.ratingAfter ?? null,
+      estimatedRating: !(stored && stored.baseBefore !== undefined && stored.ratingAfter !== undefined),
+      esk: eskCase ? {
+        id: eskCase.id,
+        status: eskCase.status,
+        verdict: eskCase.hearing?.verdict || null,
+        verdictSummary: eskCase.hearing?.verdictSummary || null
+      } : null
+    });
+  }
+  history.sort((a, b) => {
+    return String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.round || 0) - Number(a.round || 0));
+  });
+
+  const headDone = history.filter((h) => h.roleInMatch === "head");
+  // Reconstruct sequential rating chain backwards for any legacy matches without ratingHistory
+  let cursorRating = Number(r.rating || 0) > 0 ? Number(r.rating) : 7.5;
+  for (const h of headDone) {
+    if (h.baseBefore !== null && h.ratingAfter !== null) {
+      cursorRating = Number(h.baseBefore);
+    } else {
+      const afterVal = +Math.min(9.9, Math.max(5.5, cursorRating)).toFixed(2);
+      const beforeVal = +Math.min(9.9, Math.max(5.5, afterVal - (h.rawDelta || 0))).toFixed(2);
+      h.ratingAfter = afterVal;
+      h.baseBefore = beforeVal;
+      h.delta = +(afterVal - beforeVal).toFixed(2);
+      cursorRating = beforeVal;
+    }
+  }
+
+  for (const h of history) {
+    if (h.roleInMatch !== "head") {
+      h.ratingFactors = [];
+      h.ratingExplanation = `Отработал матч в роли «${h.roleLabel}». По формуле системы рейтинг главного арбитра пересчитывается только при судействе в поле, поэтому оценка не изменилась.`;
+      continue;
+    }
+    const discReason = h.rc > 0
+      ? `Удаление в матче (${h.rc} КК, ${h.yc} ЖК, ${h.fouls} фолов) — штраф −0.10 за потерю дисциплинарного контроля.`
+      : h.yc <= 4
+        ? `Спокойный контроль игры (${h.yc} ЖК ≤ 4 и 0 КК, ${h.fouls} фолов) — начислено +0.10.`
+        : `Напряжённый матч без удалений (${h.yc} ЖК > 4 и 0 КК, ${h.fouls} фолов) — начислено +0.05.`;
+    const errReason = h.refErr > 0
+      ? `В протоколе зафиксированы судейские ошибки (${h.refErr} × −0.15 = ${Number(h.errorDelta).toFixed(2)}).${h.esk ? ` Вердикт ЭСК: ${h.esk.verdictSummary || h.esk.status}.` : ""}`
+      : `Грубых судейских ошибок в протоколе не зафиксировано (0) — без штрафа (0.00).${h.varChecks > 0 ? ` Проверок VAR: ${h.varChecks}.` : ""}`;
+    const topReason = h.tier === "top"
+      ? (h.rc === 0 && h.refErr === 0
+        ? `Топовый матч («${h.tierReason}») проведён без удалений и ошибок — дополнительный бонус +0.05.`
+        : `Топовый матч («${h.tierReason}»), но бонус +0.05 не начислен из-за ${h.rc > 0 ? "удаления" : "зафиксированных ошибок"}.`)
+      : `Матч категории «${h.tierLabel}» — бонус за топовый матч не применяется (0.00).`;
+
+    const unclampedNext = +((Number(h.baseBefore) || 7.5) + (Number(h.rawDelta) || 0)).toFixed(2);
+    const wasClampedHigh = Number(h.ratingAfter) === 9.9 && unclampedNext > 9.9;
+    const wasClampedLow = Number(h.ratingAfter) === 5.5 && unclampedNext < 5.5;
+    h.wasClamped = wasClampedHigh || wasClampedLow;
+    h.clampNote = wasClampedHigh
+      ? `Без учёта потолка получалось ${unclampedNext.toFixed(2)}, итог ограничен максимумом 9.90.`
+      : wasClampedLow
+        ? `Без учёта порога получалось ${unclampedNext.toFixed(2)}, итог ограничен минимумом 5.50.`
+        : "";
+    h.ratingFactors = [
+      { key: "discipline", label: "Контроль и дисциплина", delta: Number(h.disciplineDelta || 0), reason: discReason },
+      { key: "errors", label: "Судейские ошибки", delta: Number(h.errorDelta || 0), reason: errReason },
+      { key: "top", label: "Сложность матча (топ-бонус)", delta: Number(h.topBonus || 0), reason: topReason }
+    ];
+
+    const summaryParts = [];
+    if (h.rc === 0 && h.refErr === 0) {
+      summaryParts.push(h.yc <= 4 ? "ровное и спокойное судейство без удалений и ошибок" : "справился с напряжённым матчем без удалений и ошибок");
+    } else {
+      if (h.rc > 0) summaryParts.push(`было ${h.rc} КК`);
+      if (h.refErr > 0) summaryParts.push(`допущено ошибок: ${h.refErr}`);
+    }
+    if (h.topBonus > 0) summaryParts.push("плюс бонус за чистую работу в топовом матче");
+    const signD = h.delta >= 0 ? "+" : "";
+    h.ratingExplanation = `Рейтинг ${Number(h.ratingAfter).toFixed(2)} (${signD}${Number(h.delta).toFixed(2)} к ${Number(h.baseBefore).toFixed(2)}): ${summaryParts.join(", ")}.${h.clampNote ? " " + h.clampNote : ""}`;
+  }
+
+  const aggTier = (tierKey) => {
+    const list = headDone.filter((h) => h.tier === tierKey);
+    const varList = history.filter((h) => h.roleInMatch !== "head" && h.tier === tierKey);
+    const n = list.length;
+    const sum = (k) => list.reduce((s, x) => s + (Number(x[k]) || 0), 0);
+    const avg = (k) => n ? +(sum(k) / n).toFixed(2) : 0;
+    return {
+      matches: n,
+      otherRoleMatches: varList.length,
+      yellows: sum("yc"),
+      reds: sum("rc"),
+      penalties: sum("penCount"),
+      fouls: sum("fouls"),
+      errors: sum("refErr"),
+      avgYellows: avg("yc"),
+      avgReds: avg("rc"),
+      avgPenalties: avg("penCount"),
+      avgFouls: avg("fouls"),
+      avgErrors: avg("refErr"),
+      avgDelta: n ? +(list.reduce((s, x) => s + (Number(x.delta) || 0), 0) / n).toFixed(2) : 0,
+      cleanCount: list.filter((x) => (x.yc || 0) <= 4 && (x.rc || 0) === 0 && (x.refErr || 0) === 0).length
+    };
+  };
+  const topStats = aggTier("top");
+  const midStats = aggTier("mid");
+  const weakStats = aggTier("weak");
+
+  const buildTierVerdict = (st) => {
+    if (!st.matches) {
+      return "Отработанных матчей этого уровня пока нет — статистика появится после проведения игр.";
+    }
+    const parts = [];
+    if (st.avgYellows >= 5) parts.push(`высокая строгость по карточкам (${st.avgYellows} ЖК/игру)`);
+    else if (st.avgYellows <= 3) parts.push(`мягкий порог карточек (${st.avgYellows} ЖК/игру)`);
+    else parts.push(`ровная планка (${st.avgYellows} ЖК/игру)`);
+    if (st.reds > 0) parts.push(`${st.reds} КК в ${st.matches} игр.`);
+    if (st.penalties > 0) parts.push(`${st.penalties} пен.`);
+    if (st.errors > 0) parts.push(`допустил ошибки (${st.errors})`);
+    else parts.push("без зафиксированных грубых ошибок");
+    return parts.join(", ") + ".";
+  };
+
+  let comparisonSummary = "";
+  if (topStats.matches > 0 && weakStats.matches > 0) {
+    const diffY = +(topStats.avgYellows - weakStats.avgYellows).toFixed(2);
+    if (diffY >= 1) comparisonSummary = `В топовых матчах заметно строже, чем в слабых (+${diffY} ЖК за матч: ${topStats.avgYellows} против ${weakStats.avgYellows}).`;
+    else if (diffY <= -1) comparisonSummary = `В слабых матчах выносит больше предупреждений (${weakStats.avgYellows} против ${topStats.avgYellows} в топовых).`;
+    else comparisonSummary = `Держит стабильную планку предупреждений вне зависимости от статуса матча (${topStats.avgYellows} ЖК в топах и ${weakStats.avgYellows} в слабых).`;
+  } else {
+    comparisonSummary = "Сравнение появится после проведения матчей обоих уровней (топовых и слабых).";
+  }
+
+  let cleanBonus = 0, tenseBonus = 0, redPenalty = 0, errorPenalty = 0, topBonusSum = 0;
+  for (const h of headDone) {
+    if ((h.disciplineDelta || 0) === 0.1) cleanBonus += 0.1;
+    else if ((h.disciplineDelta || 0) === 0.05) tenseBonus += 0.05;
+    else if ((h.disciplineDelta || 0) < 0) redPenalty += (h.disciplineDelta || 0);
+    errorPenalty += (h.errorDelta || 0);
+    topBonusSum += (h.topBonus || 0);
+  }
+  const totalSimulatedDelta = +(cleanBonus + tenseBonus + redPenalty + errorPenalty + topBonusSum).toFixed(2);
+  const currentRating = Number(r.rating || 0);
+  const baseStart = headDone.length
+    ? (headDone[headDone.length - 1]?.baseBefore ?? +(currentRating - totalSimulatedDelta).toFixed(2))
+    : currentRating;
+
+  res.json({
+    referee: r,
+    history,
+    ratingBreakdown: {
+      currentRating: +currentRating.toFixed(2),
+      baseStart: +Number(baseStart).toFixed(2),
+      recordedMatches: headDone.length,
+      otherRoleMatches: history.length - headDone.length,
+      cleanBonus: +cleanBonus.toFixed(2),
+      tenseBonus: +tenseBonus.toFixed(2),
+      redPenalty: +redPenalty.toFixed(2),
+      errorPenalty: +errorPenalty.toFixed(2),
+      topBonus: +topBonusSum.toFixed(2),
+      totalSimulatedDelta,
+      averages: {
+        ycPerMatch: headDone.length ? +(headDone.reduce((s, x) => s + (x.yc || 0), 0) / headDone.length).toFixed(2) : 0,
+        rcPerMatch: headDone.length ? +(headDone.reduce((s, x) => s + (x.rc || 0), 0) / headDone.length).toFixed(2) : 0,
+        penPerMatch: headDone.length ? +(headDone.reduce((s, x) => s + (x.penCount || 0), 0) / headDone.length).toFixed(2) : 0,
+        foulsPerMatch: headDone.length ? +(headDone.reduce((s, x) => s + (x.fouls || 0), 0) / headDone.length).toFixed(2) : 0,
+        errPerMatch: headDone.length ? +(headDone.reduce((s, x) => s + (x.refErr || 0), 0) / headDone.length).toFixed(2) : 0
+      },
+      formulaRules: [
+        "Рабочий диапазон рейтинга арбитра: от 5.50 до 9.90 (если исходный рейтинг 0.00, старт в первом матче идёт от базы 7.50).",
+        "Формула за матч главным судьёй: Новый рейтинг = clamp(Текущий + Дисциплина + Ошибки + Топ-бонус, 5.50, 9.90).",
+        "Спокойный контроль (≤ 4 ЖК и 0 КК в матче): +0.10 к рейтингу.",
+        "Напряжённый матч (> 4 ЖК, но без удалений): +0.05 к рейтингу.",
+        "Удаление в матче (КК > 0): −0.10 к рейтингу.",
+        "Зафиксированная ошибка арбитра в протоколе (ref_error): −0.15 за каждую ошибку.",
+        "Бонус за топовый матч / дерби (без удалений и ошибок): +0.05 дополнительно.",
+        "В роли VAR / AVAR / резервного рейтинг главного арбитра не пересчитывается."
+      ]
+    },
+    tierComparison: {
+      top: { ...topStats, assessment: buildTierVerdict(topStats) },
+      mid: { ...midStats },
+      weak: { ...weakStats, assessment: buildTierVerdict(weakStats) },
+      summary: comparisonSummary
+    }
+  });
+});
 app.post("/api/admin/referee", admin, (req, res) => {
-  const { id, name, city, age: age2, style, styleDesc, leagues, rating, bio } = req.body;
-  if (!name) return fail(res, "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0438\u043C\u044F \u0441\u0443\u0434\u044C\u0438");
+  const { id, name, city, age: age2, varRole, leagues, rating, bio } = req.body;
+  if (!name && !id) return fail(res, "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0438\u043C\u044F \u0441\u0443\u0434\u044C\u0438");
   if (id) {
     const r = db.referees.find((x) => x.id === id);
     if (!r) return fail(res, "\u0421\u0443\u0434\u044C\u044F \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
     Object.assign(r, {
-      name,
-      city: city || r.city,
-      age: Number(age2) || r.age,
-      style: style || r.style,
-      styleDesc: styleDesc || r.styleDesc,
+      name: name || r.name,
+      city: city !== undefined ? city : r.city,
+      age: age2 !== undefined && age2 !== "" ? Number(age2) || r.age : r.age,
+      varRole: varRole !== undefined ? varRole : r.varRole,
       leagues: Array.isArray(leagues) ? leagues : r.leagues,
-      rating: Number(rating) || r.rating,
-      bio: bio ?? r.bio
+      rating: rating !== undefined && rating !== "" && Number.isFinite(Number(rating)) ? Number(rating) : r.rating,
+      bio: bio !== undefined ? bio : r.bio
     });
+    delete r.style;
+    delete r.styleDesc;
+    delete r.topMatchNote;
+    delete r.weakMatchNote;
+    save();
+    return res.json({ ok: 1, referee: r });
   } else {
-    db.referees.push({
+    const newRef = {
       id: "ref_" + uid(),
       name,
       city: city || "\u041C\u043E\u0441\u043A\u0432\u0430",
       age: Number(age2) || 38,
-      style: style || "balanced",
-      styleDesc: styleDesc || bio || "\u0418\u043D\u0434\u0438\u0432\u0438\u0434\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u043C\u0430\u043D\u0435\u0440\u0430 \u0441\u0443\u0434\u0435\u0439\u0441\u0442\u0432\u0430",
+      varRole: varRole || "",
       leagues: Array.isArray(leagues) && leagues.length ? leagues : ["rpl", "cup"],
-      rating: Number(rating) || 8,
+      rating: rating !== undefined && rating !== "" && Number.isFinite(Number(rating)) ? Number(rating) : 0,
       matches: 0,
       yellows: 0,
       reds: 0,
       penalties: 0,
-      bio: bio || "\u0410\u0440\u0431\u0438\u0442\u0440 \u0420\u041F\u041B \u0438 \u041A\u0443\u0431\u043A\u0430 \u0420\u043E\u0441\u0441\u0438\u0438."
-    });
+      bio: bio || "\u0410\u0440\u0431\u0438\u0442\u0440 \u0420\u041F\u041B \u0438 \u041A\u0443\u0431\u043A\u0430 \u0420\u043E\u0441\u0441\u0438\u0438.",
+      ratingHistory: []
+    };
+    db.referees.push(newRef);
+    save();
+    return res.json({ ok: 1, referee: newRef });
   }
+});
+app.post("/api/admin/assistant", admin, (req, res) => {
+  const { id, bio, name, rating } = req.body || {};
+  const a = (db.assistants || []).find((x) => x.id === id);
+  if (!a) return fail(res, "\u041F\u043E\u043C\u043E\u0449\u043D\u0438\u043A \u0441\u0443\u0434\u044C\u0438 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
+  if (name) a.name = name;
+  if (bio !== undefined) a.bio = String(bio);
+  if (rating !== undefined && rating !== "" && Number.isFinite(Number(rating))) a.rating = Number(rating);
   save();
-  res.json({ ok: 1 });
+  res.json({ ok: 1, assistant: a });
 });
 app.post("/api/admin/fixture/referee", admin, (req, res) => {
   const f = fx(req.body.fid);
@@ -14969,7 +15358,8 @@ async function enrichEuropeanPlayer(playerName, feeStr, transferType = "transfer
 const EURO_COUNTRY_RE = /^(?:россия|беларусь|белоруссия|казахстан|армения|кыргызстан|киргизия|узбекистан|грузия|азербайджан|украина|молдова|бразилия|аргентина|уругвай|колумбия|чили|эквадор|парагвай|перу|венесуэла|мексика|сша|канада|коста-рика|испания|франция|германия|италия|англия|португалия|нидерланды|голландия|бельгия|сербия|хорватия|босния|черногория|словения|словакия|чехия|польша|венгрия|румыния|болгария|греция|турция|швеция|норвегия|дания|финляндия|исландия|швейцария|австрия|шотландия|уэльс|ирландия|албания|северная македония|македония|нигерия|сенегал|марокко|камерун|гана|кот-д'?ивуар|египет|алжир|тунис|мали|гвинея|юар|замбия|др конго|конго|кабо-верде|ангола|япония|южная корея|корея|иран|китай|австралия|новая зеландия|израиль|саудовская аравия)$/i;
 app.post("/api/club/transfer-request", needClub, async (req, res) => {
   const { playerName, fee, transferType, list, text, players, pos, age, fromClub, club, europeanClub, nationality, nation, country, fromCountry } = req.body;
-  const buyerTeam = team(req.me.teamId);
+  const targetClubId = req.tid || req.me?.teamId;
+  const buyerTeam = team(targetClubId);
   if (!buyerTeam) return fail(res, "Клуб не найден");
   let itemsToProcess = [];
   if (Array.isArray(players) && players.length > 0) {
@@ -15108,9 +15498,9 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
     });
     const reqObj = {
       id: "trq_" + uid(),
-      clubId: req.me.teamId,
+      clubId: targetClubId,
       clubName: buyerTeam.name,
-      clubLogo: teamLogo(req.me.teamId),
+      clubLogo: teamLogo(targetClubId),
       playerName: item.name,
       pos: enriched.pos,
       age: enriched.age,
@@ -15143,8 +15533,29 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
   });
 });
 app.get("/api/club/transfer-requests", needClub, (req, res) => {
-  const list = (db.transferRequests || []).filter((r) => r.clubId === req.me.teamId);
+  const targetClubId = req.tid || req.me?.teamId;
+  const list = (db.transferRequests || []).filter((r) => r.clubId === targetClubId);
   res.json({ requests: list });
+});
+app.post("/api/club/transfer-request/cancel", needClub, (req, res) => {
+  const requestId = String(req.body?.requestId || "").trim();
+  if (!requestId) return fail(res, "Укажите заявку для отмены");
+  const targetClubId = req.tid || req.me?.teamId;
+  const list = db.transferRequests || [];
+  const idx = list.findIndex((r) => r.id === requestId && r.clubId === targetClubId);
+  if (idx === -1) return fail(res, "Заявка на трансфер из Европы не найдена", 404);
+  const reqObj = list[idx];
+  if (reqObj.status !== "pending") {
+    return fail(res, "Нельзя отменить заявку: администратор уже принял по ней решение");
+  }
+  list.splice(idx, 1);
+  save();
+  return res.json({
+    ok: 1,
+    cancelled: true,
+    requestId,
+    message: `Заявка на трансфер ${reqObj.playerName} из Европы отменена.`
+  });
 });
 app.get("/api/admin/transfer-requests", admin, (req, res) => {
   const byClub = {};
@@ -15261,7 +15672,7 @@ app.post("/api/admin/transfer-requests/resolve", admin, (req, res) => {
     if (feeAmt && feeAmt > 0 && buyer) {
       const feeEuros = Math.round(feeAmt * 1e6);
       const prev = buyer.budget || 0;
-      buyer.budget = Math.max(0, prev - feeEuros);
+      buyer.budget = prev - feeEuros;
       if (!Array.isArray(db.budgetHistory)) db.budgetHistory = [];
       db.budgetHistory.push({
         id: uid(),
