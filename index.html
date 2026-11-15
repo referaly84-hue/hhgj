@@ -3223,6 +3223,8 @@ async function refreshStats(id) {
   try {
     const x = await api('/match/' + id);
     M.stats = x.stats;
+    M.ratings = x.ratings || M.ratings;
+    if (x.motm) M.motm = x.motm;
     if (mtab === 'stats') paintMatch();
   } catch { }
 }
@@ -3352,7 +3354,15 @@ function paintMatch() {
       const t = (+h + +a) || 1;
       return `<div class="bar2"><div class="v">${h}</div><div><div class="c">${n}</div><div class="bb"><i style="width:${h / t * 100}%"></i><i style="width:${a / t * 100}%"></i></div></div><div class="v">${a}</div></div>`;
     };
-    const pl = Object.values(s.players).sort((a, b) => b.min - a.min);
+    const pl = Object.entries(s.players).map(([pid, p]) => ({ ...p, id: p.id || pid })).sort((a, b) => b.min - a.min);
+    const getRatingEntry = (pid, pObj) => {
+      if (M.ratings && !Array.isArray(M.ratings) && M.ratings[pid]) return M.ratings[pid];
+      if (Array.isArray(M.ratings)) {
+        const hit = M.ratings.find(r => (r.playerId || r.id) === pid || (pObj?.n && r.name === pObj.n));
+        if (hit) return hit;
+      }
+      return null;
+    };
     b.innerHTML = `<div class="panel">
       ${bar('Владение, %', s.poss[0], s.poss[1])}
       ${bar('Удары', H.sh, A.sh)}
@@ -3368,9 +3378,12 @@ function paintMatch() {
       ${bar('Пенальти', H.penF, A.penF)}
     </div>
     <div class="panel wrap"><table><thead><tr><th class="l">Игрок</th><th>Оценка</th><th>Мин</th><th>Г</th><th>П</th><th>Уд</th><th>xG</th><th>Отб</th><th>Сейвы</th><th>Фолы</th><th>ЖК</th><th>КК</th></tr></thead><tbody>${pl.map(p => {
-      const rat = M.ratings?.[p.id]?.rating || p.rating || (p.min > 0 ? '6.5' : '—');
-      const isMotm = M.motm?.player?.id === p.id || M.motm?.player?.name === p.n || M.motm?.name === p.n;
-      const ratColor = +rat >= 8.0 ? 'background:#ffd700;color:#3f2e00' : (+rat >= 7.0 ? 'background:#e3f4e8;color:#0d5929' : (+rat < 6.0 ? 'background:#ffebee;color:#b71c1c' : 'background:var(--soft)'));
+      const rEntry = getRatingEntry(p.id, p);
+      const rawRat = rEntry?.rating ?? p.rating;
+      const ratNum = rawRat !== undefined && rawRat !== null && rawRat !== '' && Number.isFinite(Number(rawRat)) ? Number(rawRat) : null;
+      const rat = ratNum !== null ? ratNum.toFixed(1) : '—';
+      const isMotm = !!(M.motm && ((M.motm.player?.id && M.motm.player.id === p.id) || (M.motm.pid && M.motm.pid === p.id) || (M.motm.playerId && M.motm.playerId === p.id) || (M.motm.name && M.motm.name === p.n)));
+      const ratColor = ratNum !== null ? (ratNum >= 8.0 ? 'background:#ffd700;color:#3f2e00' : (ratNum >= 7.0 ? 'background:#e3f4e8;color:#0d5929' : (ratNum < 6.0 ? 'background:#ffebee;color:#b71c1c' : 'background:var(--soft)'))) : 'background:var(--soft);color:var(--muted)';
       return `<tr><td class="l">${isMotm ? '⭐ ' : ''}<b>${e(p.n)}</b> <span class="muted small">${p.side === 'home' ? e(M.fixture.homeName) : e(M.fixture.awayName)}</span></td><td><span class="tag" style="font-weight:700;${ratColor}">${rat}</span></td><td>${p.min}</td><td>${p.g}</td><td>${p.a}</td><td>${p.sh}</td><td>${p.xg}</td><td>${p.tk}</td><td>${p.sv}</td><td>${p.ff}/${p.fa}</td><td>${p.yc}</td><td>${p.rc}</td></tr>`;
     }).join('')}</tbody></table></div>`;
   } else if (mtab === 'interview') {
@@ -3496,6 +3509,11 @@ function paintMatch() {
           });
           return items.length ? `<h4 style="margin-top:14px;margin-bottom:6px">⭐ Исполнители стандартов</h4><div style="display:flex;flex-wrap:wrap;gap:6px">${items.join('')}</div>` : '';
         })()}
+        ${Array.isArray(sideLineup.plannedSubs) && sideLineup.plannedSubs.length ? `
+        <h4 style="margin-top:14px;margin-bottom:6px">🔄 Плановые замены</h4>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:12.5px">
+          ${sideLineup.plannedSubs.map(ps => `<div><span class="tag" style="font-weight:700">${ps.minute}'</span> <b>${e(ps.inName)}</b> вместо ${e(ps.outName)} <span class="muted small">(${e(ps.conditionLabel || 'при любом счёте')})</span></div>`).join('')}
+        </div>` : ''}
         ${canSeeTactics ? `
         <h4 style="margin-top:14px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
           <span>🔒 Установка тренера</span>
@@ -6893,6 +6911,7 @@ function lineupForm(box, f, c, withT, app) {
   }).join('')}</div>
   ${loanBlock}
   <div id="slots_editor" style="margin:14px 0;padding:12px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--line);border-radius:10px"></div>
+  <div id="subs_editor" style="margin:14px 0;padding:12px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--line);border-radius:10px"></div>
   <div id="roles_editor" style="margin:14px 0;padding:12px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--line);border-radius:10px"></div>
   <label>Тактика — всё, что тренер говорит игрокам перед матчем</label><textarea class="sp1" placeholder="Пишите как есть: установка, настрой, речь. Молчание — тоже речь.">${e(L.speech || '')}</textarea>
   <label>Тренировочный план перед матчем (произвольный текст)</label><textarea class="tr1" placeholder="Например: пн — отдых, вт — прессинг 2 часа, ср — стандарты, чт — разминка, пт — отдых">${e(L.training || '')}</textarea>
@@ -6903,6 +6922,14 @@ function lineupForm(box, f, c, withT, app) {
 
   let currentSlots = Array.isArray(L.slots) ? L.slots.map(x => ({ slot: x.slot, pid: x.pid })) : [];
   let currentRoles = { ...initRoles };
+  let currentPlannedSubs = Array.isArray(L.plannedSubs)
+    ? L.plannedSubs.map(x => ({
+        minute: Math.max(1, Math.min(90, Math.round(Number(x.minute) || 65))),
+        outPid: String(x.outPid || ''),
+        inPid: String(x.inPid || ''),
+        condition: String(x.condition || 'always')
+      }))
+    : [];
   let lastValidFm = String(L.formation || '4-3-3').trim();
   const isCompleteFormation = fmStr => {
     const s = String(fmStr || '').trim();
@@ -7071,8 +7098,151 @@ function lineupForm(box, f, c, withT, app) {
     }
     box.querySelector('[data-cnt]').innerHTML = `— старт ${a}/11, скамейка ${b}${legionInfo}`;
   };
+  const SUB_COND_OPTIONS = [
+    ['always', 'При любом счёте'],
+    ['winning', 'Если ведём в счёте'],
+    ['losing', 'Если проигрываем'],
+    ['drawing', 'При ничьей'],
+    ['not_winning', 'Если не ведём'],
+    ['tired', 'При усталости игрока']
+  ];
+  const renderSubsEditor = () => {
+    const wrap = box.querySelector('#subs_editor');
+    if (!wrap) return;
+    const { sPids, bPids } = getSelected();
+    const sSet = new Set(sPids);
+    const bSet = new Set(bPids);
+    if (sPids.length < 11 || bPids.length === 0) {
+      wrap.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:4px">🔄 Плановые замены на матч (до 5 замен в 3 слота)</div><div class="muted small">Чтобы поставить замены, выберите 11 игроков в стартовый состав и хотя бы 1 игрока на скамейку.</div>`;
+      return;
+    }
+    const validSubs = [];
+    const usedIn = new Set();
+    const usedOut = new Set();
+    const onPitch = new Set(sSet);
+    const sorted = currentPlannedSubs
+      .map((item, origIdx) => ({ ...item, origIdx }))
+      .sort((a, b) => a.minute - b.minute || a.origIdx - b.origIdx);
+    for (const ps of sorted) {
+      if (validSubs.length >= 5) break;
+      if (!ps.outPid || !ps.inPid || ps.outPid === ps.inPid) continue;
+      if (!bSet.has(ps.inPid) || usedIn.has(ps.inPid)) continue;
+      if (!onPitch.has(ps.outPid) || usedOut.has(ps.outPid)) continue;
+      usedIn.add(ps.inPid);
+      usedOut.add(ps.outPid);
+      onPitch.delete(ps.outPid);
+      onPitch.add(ps.inPid);
+      validSubs.push({ minute: ps.minute, outPid: ps.outPid, inPid: ps.inPid, condition: ps.condition || 'always' });
+    }
+    currentPlannedSubs = validSubs;
+
+    const distinctTimes = [];
+    for (const tSec of validSubs.map(x => x.minute * 60).sort((a, b) => a - b)) {
+      if (!distinctTimes.length || tSec - distinctTimes[distinctTimes.length - 1] > 90) distinctTimes.push(tSec);
+    }
+    const tooManyWindows = distinctTimes.length > 3;
+
+    const legionWarn = isRpl && validSubs.some(ps => {
+      const pOut = poolById[ps.outPid], pIn = poolById[ps.inPid];
+      return pOut && !pOut.isLegionnaire && pIn && pIn.isLegionnaire;
+    });
+
+    const rowsHtml = validSubs.map((ps, idx) => {
+      const outCandidates = [...sPids, ...validSubs.slice(0, idx).map(x => x.inPid)].filter((pid, k, arr) => arr.indexOf(pid) === k && (pid === ps.outPid || !validSubs.some((o, oi) => oi !== idx && o.outPid === pid)));
+      const inCandidates = bPids.filter(pid => pid === ps.inPid || !validSubs.some((o, oi) => oi !== idx && o.inPid === pid));
+      const outOpts = outCandidates.map(pid => {
+        const p = poolById[pid];
+        return `<option value="${e(pid)}" ${pid === ps.outPid ? 'selected' : ''}>${e(p?.pos || '?')} · ${e(p?.name || pid)}</option>`;
+      }).join('');
+      const inOpts = inCandidates.map(pid => {
+        const p = poolById[pid];
+        return `<option value="${e(pid)}" ${pid === ps.inPid ? 'selected' : ''}>${e(p?.pos || '?')} · ${e(p?.name || pid)}</option>`;
+      }).join('');
+      const condOpts = SUB_COND_OPTIONS.map(([val, lbl]) => `<option value="${val}" ${ps.condition === val ? 'selected' : ''}>${lbl}</option>`).join('');
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap">
+        <label class="small" style="display:flex;align-items:center;gap:4px;margin:0;white-space:nowrap">
+          <span>Мин:</span>
+          <input type="number" min="1" max="90" class="sub-min-inp" data-sub-idx="${idx}" value="${ps.minute}" style="width:62px;padding:4px 6px;text-align:center;font-weight:700">
+        </label>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:170px">
+          <span class="small muted" style="white-space:nowrap">Уходит:</span>
+          <select class="sub-out-pick" data-sub-idx="${idx}" style="flex:1;min-width:120px">${outOpts}</select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:170px">
+          <span class="small muted" style="white-space:nowrap">Выходит:</span>
+          <select class="sub-in-pick" data-sub-idx="${idx}" style="flex:1;min-width:120px">${inOpts}</select>
+        </div>
+        <select class="sub-cond-pick" data-sub-idx="${idx}" style="min-width:140px">${condOpts}</select>
+        <button type="button" class="btn sm alt sub-del-btn" data-sub-idx="${idx}" title="Удалить замену" style="padding:3px 8px">✕</button>
+      </div>`;
+    }).join('');
+
+    const availBenchForNew = bPids.filter(pid => !validSubs.some(x => x.inPid === pid));
+    const availOutForNew = sPids.filter(pid => !validSubs.some(x => x.outPid === pid) && poolById[pid]?.pos !== 'ВР');
+    const canAdd = validSubs.length < 5 && availBenchForNew.length > 0 && (availOutForNew.length > 0 || sPids.some(pid => !validSubs.some(x => x.outPid === pid)));
+
+    wrap.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <div style="font-weight:700;font-size:13px">🔄 Плановые замены на матч (${validSubs.length}/5 · слотов: ${distinctTimes.length}/3)</div>
+        <button type="button" class="btn sm alt" id="add_sub_btn" ${canAdd ? '' : 'disabled'} style="font-size:11.5px;padding:3px 10px">+ Добавить замену</button>
+      </div>
+      <div class="muted small" style="margin-bottom:${validSubs.length ? '6px' : '0'}">Укажите минуту, кого заменить и при каком счёте проводить замену. На одну и ту же минуту можно поставить несколько замен (одно окно).</div>
+      ${rowsHtml ? `<div>${rowsHtml}</div>` : ''}
+      ${tooManyWindows ? `<div style="margin-top:8px;padding:7px 10px;border-radius:6px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:12px"><b>⚠ Превышено число окон замен (${distinctTimes.length} из 3):</b> по правилам допускается максимум 3 остановки для замен (5 игроков). Объедините часть замен на одну минуту.</div>` : ''}
+      ${legionWarn ? `<div style="margin-top:8px;padding:7px 10px;border-radius:6px;background:#fffbeb;border:1px solid #fcd34d;color:#b45309;font-size:12px"><b>ℹ Лимит легионеров:</b> при замене россиянина на легионера следите, чтобы на поле одновременно оставалось не больше ${limit.onPitch} легионеров.</div>` : ''}
+    `;
+
+    wrap.querySelector('#add_sub_btn')?.addEventListener('click', () => {
+      const nextIn = bPids.find(pid => !currentPlannedSubs.some(x => x.inPid === pid));
+      const nextInPos = poolById[nextIn]?.pos;
+      const samePosOut = sPids.find(pid => !currentPlannedSubs.some(x => x.outPid === pid) && poolById[pid]?.pos === nextInPos);
+      const nonGkOut = sPids.find(pid => !currentPlannedSubs.some(x => x.outPid === pid) && poolById[pid]?.pos !== 'ВР');
+      const nextOut = samePosOut || nonGkOut || sPids.find(pid => !currentPlannedSubs.some(x => x.outPid === pid));
+      if (!nextIn || !nextOut) return;
+      const defaultMin = Math.min(88, 60 + currentPlannedSubs.length * 7);
+      currentPlannedSubs.push({ minute: defaultMin, outPid: nextOut, inPid: nextIn, condition: 'always' });
+      renderSubsEditor();
+    });
+    wrap.querySelectorAll('.sub-min-inp').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const idx = Number(inp.dataset.subIdx);
+        const v = Math.max(1, Math.min(90, Math.round(Number(inp.value) || 65)));
+        if (currentPlannedSubs[idx]) currentPlannedSubs[idx].minute = v;
+        renderSubsEditor();
+      });
+    });
+    wrap.querySelectorAll('.sub-out-pick').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const idx = Number(sel.dataset.subIdx);
+        if (currentPlannedSubs[idx]) currentPlannedSubs[idx].outPid = sel.value;
+        renderSubsEditor();
+      });
+    });
+    wrap.querySelectorAll('.sub-in-pick').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const idx = Number(sel.dataset.subIdx);
+        if (currentPlannedSubs[idx]) currentPlannedSubs[idx].inPid = sel.value;
+        renderSubsEditor();
+      });
+    });
+    wrap.querySelectorAll('.sub-cond-pick').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const idx = Number(sel.dataset.subIdx);
+        if (currentPlannedSubs[idx]) currentPlannedSubs[idx].condition = sel.value;
+      });
+    });
+    wrap.querySelectorAll('.sub-del-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.subIdx);
+        currentPlannedSubs.splice(idx, 1);
+        renderSubsEditor();
+      });
+    });
+  };
+
   cnt();
   renderSlotsEditor();
+  renderSubsEditor();
   renderRolesEditor();
   const handleFormationEdit = () => {
     const fmVal = String(box.querySelector('.fm')?.value || '').trim();
@@ -7086,6 +7256,7 @@ function lineupForm(box, f, c, withT, app) {
     if (ev.target.matches('select[data-p]')) {
       cnt();
       renderSlotsEditor();
+      renderSubsEditor();
       renderRolesEditor();
     } else if (ev.target.matches('.fm')) {
       cnt();
@@ -7187,6 +7358,7 @@ function lineupForm(box, f, c, withT, app) {
       bench,
       slots: slotsPayload.length === 11 ? slotsPayload : undefined,
       roles: rolesPayload,
+      plannedSubs: currentPlannedSubs,
       speech: box.querySelector('.sp1').value,
       training: box.querySelector('.tr1').value
     })), 'Сохранено');
@@ -7571,7 +7743,7 @@ async function pgAdmin(app) {
     });
     ab.querySelectorAll('[data-lu]').forEach(b => b.onclick = async () => {
       const l = await api('/admin/lineups/' + b.dataset.lu);
-      modal(['home', 'away'].map(s => `<div class="row" style="gap:10px">${l[s].logo ? `<img class="t-logo md" src="${l[s].logo}" alt=""/>` : ''}<h3 style="margin:0">${e(l[s].team)} · ${e(l[s].formation)} ${l[s].submitted ? '' : '<span class="tag">авто</span>'}</h3></div><p class="small"><b>Старт:</b> ${e(l[s].starters.join(', '))}<br><b>Скамейка:</b> ${e(l[s].bench.join(', '))}${l[s].roleSummary?.length ? `<br><b>Стандарты/капитан:</b> ${e(l[s].roleSummary.join('; '))}` : ''}${l[s].slotMismatches?.length ? `<br><span style="color:#b45309"><b>Перестановки в схеме:</b> ${e(l[s].slotMismatches.join('; '))}</span>` : ''}</p><div class="qa small">Речь: ${e(l[s].speech || '(молчание)')}\nТренировки: ${e(l[s].training || '—')}</div>`).join('<hr>'));
+      modal(['home', 'away'].map(s => `<div class="row" style="gap:10px">${l[s].logo ? `<img class="t-logo md" src="${l[s].logo}" alt=""/>` : ''}<h3 style="margin:0">${e(l[s].team)} · ${e(l[s].formation)} ${l[s].submitted ? '' : '<span class="tag">авто</span>'}</h3></div><p class="small"><b>Старт:</b> ${e(l[s].starters.join(', '))}<br><b>Скамейка:</b> ${e(l[s].bench.join(', '))}${l[s].roleSummary?.length ? `<br><b>Стандарты/капитан:</b> ${e(l[s].roleSummary.join('; '))}` : ''}${l[s].plannedSubsSummary?.length ? `<br><b>Плановые замены:</b> ${e(l[s].plannedSubsSummary.join('; '))}` : ''}${l[s].slotMismatches?.length ? `<br><span style="color:#b45309"><b>Перестановки в схеме:</b> ${e(l[s].slotMismatches.join('; '))}</span>` : ''}</p><div class="qa small">Речь: ${e(l[s].speech || '(молчание)')}\nТренировки: ${e(l[s].training || '—')}</div>`).join('<hr>'));
     });
     ab.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => {
       window.openMatchScheduleModal(b.dataset.ed, () => re());

@@ -599,62 +599,302 @@ function getAllInitialStaff(teams) {
 }
 
 // src/awards.ts
+var SUB_COND_LABELS: Record<string, string> = {
+  always: "при любом счёте",
+  winning: "если ведём в счёте",
+  losing: "если проигрываем",
+  drawing: "при ничейном счёте",
+  not_winning: "если не ведём (ничья/проигрыш)",
+  tired: "при усталости игрока"
+};
+function normalizePlannedSubs(rawSubs: any, starters: string[], bench: string[]) {
+  if (!Array.isArray(rawSubs) || !starters.length || !bench.length) return [];
+  const starterSet = new Set(starters);
+  const benchSet = new Set(bench);
+  const items = rawSubs
+    .filter((x) => x && typeof x === "object")
+    .map((x, idx) => ({
+      idx,
+      minute: clamp(Math.round(Number(x.minute) || 65), 1, 90),
+      outPid: String(x.outPid || "").trim(),
+      inPid: String(x.inPid || "").trim(),
+      condition: SUB_COND_LABELS[String(x.condition || "")] ? String(x.condition) : "always",
+      note: String(x.note || "").replace(/[<>]/g, "").trim().slice(0, 120)
+    }))
+    .sort((a, b) => a.minute - b.minute || a.idx - b.idx);
+  const out: any[] = [];
+  const usedIn = new Set<string>();
+  const usedOut = new Set<string>();
+  const onPitchAfterPrior = new Set<string>(starterSet);
+  for (const item of items) {
+    if (out.length >= 5) break;
+    if (!item.outPid || !item.inPid || item.outPid === item.inPid) continue;
+    if (!benchSet.has(item.inPid) || usedIn.has(item.inPid)) continue;
+    if (!onPitchAfterPrior.has(item.outPid) || usedOut.has(item.outPid)) continue;
+    usedIn.add(item.inPid);
+    usedOut.add(item.outPid);
+    onPitchAfterPrior.delete(item.outPid);
+    onPitchAfterPrior.add(item.inPid);
+    out.push({
+      minute: item.minute,
+      outPid: item.outPid,
+      inPid: item.inPid,
+      condition: item.condition,
+      ...(item.note ? { note: item.note } : {})
+    });
+  }
+  return out;
+}
+function ratingHashOffset(key: string) {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const u = (h >>> 0) % 1000 / 999;
+  return +(u * 0.36 - 0.16).toFixed(2);
+}
 function computeMatchRatings(match, fixture, homeName, awayName) {
-  const ratings = [];
-  const events = match?.events || [];
-  const homeLineup = match?.lineup?.home || fixture?.lineup?.home || [];
-  const awayLineup = match?.lineup?.away || fixture?.lineup?.away || [];
-  const addPlayers = (list, tName, tid) => {
-    for (const p of list) {
-      if (!p) continue;
-      let base = 6 + Math.random() * 1.5;
-      const pid = p.id || p.playerId;
-      const goals = events.filter((e) => e.type === "goal" && (e.player === p.name || e.playerId === pid)).length;
-      base += goals * 1.2;
-      ratings.push({
-        playerId: pid,
-        name: p.name,
-        pos: p.pos || "\u041D\u0410\u041F",
-        team: tName,
-        teamId: tid,
-        rating: Math.min(10, Math.max(5, +base.toFixed(1))),
-        goals,
-        assists: 0
-      });
+  const ctx = match?.ctx;
+  const events = Array.isArray(match?.events) ? match.events : [];
+  const stats = match?.stats || fixture?.st || (ctx && events.length ? computeStats(events, ctx) : null);
+  const pStatsMap = stats?.players || {};
+
+  const homeScore = Number.isFinite(Number(stats?.teams?.home?.g)) ? Number(stats.teams.home.g) : Number(fixture?.hg ?? fixture?.final?.[0] ?? 0);
+  const awayScore = Number.isFinite(Number(stats?.teams?.away?.g)) ? Number(stats.teams.away.g) : Number(fixture?.ag ?? fixture?.final?.[1] ?? 0);
+
+  const ownGoalCount: Record<string, number> = {};
+  const touchCount: Record<string, number> = {};
+  const bigMissCount: Record<string, number> = {};
+  for (const ev of events) {
+    const p0 = ev?.pids?.[0];
+    const p1 = ev?.pids?.[1];
+    if (ev?.type === "own_goal" && p0) ownGoalCount[p0] = (ownGoalCount[p0] || 0) + 1;
+    if (["dribble", "pass", "highlight", "freekick", "corner", "penalty"].includes(ev?.type)) {
+      if (p0) touchCount[p0] = (touchCount[p0] || 0) + 1;
+      if (p1) touchCount[p1] = (touchCount[p1] || 0) + 1;
     }
+    if ((ev?.type === "miss" || ev?.type === "post") && p0 && Number(ev?.xg || 0) >= 0.25) {
+      bigMissCount[p0] = (bigMissCount[p0] || 0) + 1;
+    }
+  }
+
+  const candidateIds: string[] = [];
+  const seen = new Set<string>();
+  const addPid = (pid: string) => {
+    if (!pid || seen.has(pid)) return;
+    seen.add(pid);
+    candidateIds.push(pid);
   };
-  addPlayers(homeLineup, homeName, fixture?.home);
-  addPlayers(awayLineup, awayName, fixture?.away);
+  for (const pid of Object.keys(pStatsMap)) addPid(pid);
+  if (ctx?.lineup) {
+    for (const s of ["home", "away"]) {
+      for (const pid of ctx.lineup[s]?.starters || []) addPid(pid);
+      for (const pid of ctx.lineup[s]?.bench || []) {
+        if ((pStatsMap[pid]?.min || 0) > 0) addPid(pid);
+      }
+    }
+  }
+  if (!candidateIds.length && (match?.lineup?.home || fixture?.lineup?.home)) {
+    for (const sideKey of ["home", "away"]) {
+      const legacyList = match?.lineup?.[sideKey] || fixture?.lineup?.[sideKey] || [];
+      if (Array.isArray(legacyList)) {
+        for (const lp of legacyList) {
+          if (lp && (lp.id || lp.playerId)) addPid(lp.id || lp.playerId);
+        }
+      }
+    }
+  }
+
+  const ratings: any[] = [];
+  for (const pid of candidateIds) {
+    const ps = pStatsMap[pid] || {};
+    const dbP = player(pid);
+    const min = Number(ps.min || 0);
+    if (min <= 0 && !ctx?.lineup?.home?.starters?.includes(pid) && !ctx?.lineup?.away?.starters?.includes(pid)) continue;
+    const effMin = min > 0 ? min : (ctx?.lineup?.home?.starters?.includes(pid) || ctx?.lineup?.away?.starters?.includes(pid) ? 90 : 0);
+    if (effMin <= 0) continue;
+
+    const side = ps.side || ctx?.pidSide?.[pid] || (dbP?.teamId === fixture?.away ? "away" : "home");
+    const tid = ps.t || ctx?.pidTeam?.[pid] || (side === "away" ? fixture?.away : fixture?.home);
+    const tName = side === "away" ? (awayName || tn(tid)) : (homeName || tn(tid));
+    const name = ps.n || ctx?.names?.[pid] || dbP?.name || "Игрок";
+    const pos = ctx?.pos?.[pid] || dbP?.pos || "ЦП";
+    const slotPos = ctx?.slotPos?.[pid] || pos;
+
+    const g = Number(ps.g || 0);
+    const a = Number(ps.a || 0);
+    const sh = Number(ps.sh || 0);
+    const xg = Number(ps.xg || 0);
+    const tk = Number(ps.tk || 0);
+    const sv = Number(ps.sv || 0);
+    const ff = Number(ps.ff || 0);
+    const fa = Number(ps.fa || 0);
+    const yc = Number(ps.yc || 0);
+    const rc = Number(ps.rc || 0);
+    const cs = Number(ps.cs || 0);
+    const og = ownGoalCount[pid] || 0;
+    const touches = touchCount[pid] || 0;
+    const misses = bigMissCount[pid] || 0;
+
+    const teamGF = side === "away" ? awayScore : homeScore;
+    const teamGA = side === "away" ? homeScore : awayScore;
+    const minScale = clamp(effMin / 90, 0.15, 1);
+
+    let score = effMin < 20 ? 6.15 : effMin < 45 ? 6.25 : 6.35;
+
+    // Командный результат
+    if (teamGF > teamGA) score += (teamGF - teamGA >= 2 ? 0.35 : 0.25) * minScale;
+    else if (teamGF === teamGA) score += 0.05 * minScale;
+    else score -= (teamGA - teamGF >= 2 ? 0.32 : 0.18) * minScale;
+
+    // Вклад по позиции и обороне
+    const isGk = pos === "ВР" || slotPos === "ВР";
+    const isDef = ["ЦЗ", "ЛЗ", "ПЗ"].includes(pos) || ["ЦЗ", "ЛЗ", "ПЗ"].includes(slotPos);
+    const isDm = pos === "ОП" || slotPos === "ОП";
+
+    if (isGk) {
+      if (cs === 1 || (teamGA === 0 && effMin >= 60)) score += 0.75;
+      score += Math.min(2.2, sv * 0.28);
+      score -= teamGA * 0.24 * minScale;
+    } else if (isDef) {
+      if (teamGA === 0 && effMin >= 45) score += 0.45;
+      score -= Math.max(0, teamGA - 1) * 0.16 * minScale;
+    } else if (isDm) {
+      if (teamGA === 0 && effMin >= 45) score += 0.2;
+    }
+
+    // Результативные действия и активность
+    if (g > 0) {
+      score += 1.15 + (g - 1) * 0.95 + (isDef || isDm ? 0.2 : 0);
+    }
+    if (a > 0) score += a * 0.72;
+    score += Math.min(0.48, sh * 0.08 + xg * 0.36);
+    if (xg >= 0.65 && g === 0) score -= 0.16;
+    score -= Math.min(0.3, misses * 0.12);
+    score += Math.min(0.88, tk * 0.24);
+    score += Math.min(0.46, touches * 0.08);
+    score += Math.min(0.3, fa * 0.07);
+    score -= Math.min(0.48, ff * 0.09);
+    score -= yc * 0.25;
+    score -= rc * 1.35;
+    score -= og * 0.95;
+
+    // Небольшая детерминированная вариация, чтобы оценки не сливались в одинаковые числа
+    score += ratingHashOffset(`${fixture?.id || "m"}:${pid}`);
+
+    const finalRating = +clamp(score, 4.0, 10.0).toFixed(1);
+    ratings.push({
+      playerId: pid,
+      id: pid,
+      name,
+      pos,
+      slotPos,
+      team: tName,
+      teamId: tid,
+      side,
+      min: Math.round(effMin),
+      rating: finalRating,
+      goals: g,
+      assists: a,
+      saves: sv,
+      shots: sh,
+      xg: +xg.toFixed(2),
+      tackles: tk,
+      yc,
+      rc,
+      cs
+    });
+  }
+
+  ratings.sort((a, b) =>
+    b.rating - a.rating ||
+    b.goals - a.goals ||
+    b.assists - a.assists ||
+    b.saves - a.saves ||
+    b.tackles - a.tackles ||
+    b.min - a.min
+  );
   return ratings;
 }
 function getMatchMotm(match, fixture, homeName, awayName, coachHome, coachAway) {
-  const ratings = match?.ratings || computeMatchRatings(match, fixture, homeName, awayName);
+  const cached = Array.isArray(match?.ratings) && match.ratings.length ? match.ratings : null;
+  const ratings = cached || computeMatchRatings(match, fixture, homeName, awayName);
   if (!ratings.length) {
-    return {
-      playerId: "motm_1",
-      name: "\u041B\u0443\u0447\u0448\u0438\u0439 \u0438\u0433\u0440\u043E\u043A \u043C\u0430\u0442\u0447\u0430",
-      pos: "\u041D\u0410\u041F",
-      rating: 8.5,
-      team: homeName,
-      teamName: homeName,
-      headline: `\u042F\u0440\u043A\u0430\u044F \u0438\u0433\u0440\u0430 \u0432 \u0430\u0442\u0430\u043A\u0435 \u0440\u0435\u0448\u0438\u043B\u0430 \u0438\u0441\u0445\u043E\u0434 \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u044F!`,
-      interview: {
-        headline: `\xAB\u0413\u043B\u0430\u0432\u043D\u043E\u0435 \u2014 \u043F\u043E\u0431\u0435\u0434\u0430 \u043A\u043E\u043C\u0430\u043D\u0434\u044B \u0438 \u0440\u0430\u0434\u043E\u0441\u0442\u044C \u043D\u0430\u0448\u0438\u0445 \u0431\u043E\u043B\u0435\u043B\u044C\u0449\u0438\u043A\u043E\u0432\xBB`,
-        quote: `\u041C\u044B \u0432\u044B\u043F\u043E\u043B\u043D\u0438\u043B\u0438 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 \u043D\u0430\u0441\u0442\u0430\u0432\u043D\u0438\u043A\u0430, \u0441\u044B\u0433\u0440\u0430\u043B\u0438 \u0434\u0438\u0441\u0446\u0438\u043F\u043B\u0438\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E \u0438 \u0434\u043E\u0432\u0435\u043B\u0438 \u0434\u0435\u043B\u043E \u0434\u043E \u043F\u043E\u0431\u0435\u0434\u044B!`,
-        tacticsComment: `\u0422\u0440\u0435\u043D\u0435\u0440 \u043F\u0440\u043E\u0441\u0438\u043B \u0434\u0435\u0439\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0448\u0438\u0440\u043E\u043A\u043E \u0438 \u043F\u0440\u0435\u0441\u0441\u0438\u043D\u0433\u043E\u0432\u0430\u0442\u044C \u0441 \u043F\u0435\u0440\u0432\u044B\u0445 \u043C\u0438\u043D\u0443\u0442.`,
-        mood: "happy"
-      }
-    };
+    const hg = Number(fixture?.hg ?? 0);
+    const ag = Number(fixture?.ag ?? 0);
+    const winTid = ag > hg ? fixture?.away : fixture?.home;
+    const winName = ag > hg ? awayName : homeName;
+    const fallbackP = squadOf(winTid)[0] || squadOf(fixture?.home)[0] || squadOf(fixture?.away)[0];
+    if (fallbackP) {
+      const tObj = team(fallbackP.teamId) || team(winTid);
+      const tNm = tObj?.name || winName || homeName;
+      const r = +(7.4 + (hg !== ag ? 0.5 : 0.2)).toFixed(1);
+      return {
+        pid: fallbackP.id,
+        playerId: fallbackP.id,
+        name: fallbackP.name,
+        pos: fallbackP.pos || "ЦП",
+        rating: r,
+        team: tNm,
+        teamName: tNm,
+        teamId: tObj?.id || winTid,
+        teamLogo: teamLogo(tObj?.id || winTid),
+        goals: 0,
+        assists: 0,
+        saves: 0,
+        headline: `«${fallbackP.name}: командная дисциплина решила исход встречи ${homeName} — ${awayName}»`,
+        interview: {
+          headline: `«${fallbackP.name}: мы выполнили установку и добились результата»`,
+          quote: `Матч получился напряжённым, но мы держали концентрацию до финального свистка. Спасибо болельщикам за поддержку!`,
+          tacticsComment: `Тренерский штаб чётко разобрал соперника, и план на игру сработал.`,
+          mood: "satisfied"
+        }
+      };
+    }
+    return null;
   }
-  const best = [...ratings].sort((a, b) => b.rating - a.rating)[0];
+  const hg = Number(fixture?.hg ?? match?.stats?.teams?.home?.g ?? 0);
+  const ag = Number(fixture?.ag ?? match?.stats?.teams?.away?.g ?? 0);
+  const winTid = hg > ag ? fixture?.home : (ag > hg ? fixture?.away : null);
+  const best = [...ratings].sort((a, b) =>
+    b.rating - a.rating ||
+    b.goals - a.goals ||
+    b.assists - a.assists ||
+    ((winTid && b.teamId === winTid ? 1 : 0) - (winTid && a.teamId === winTid ? 1 : 0)) ||
+    b.saves - a.saves ||
+    b.tackles - a.tackles
+  )[0];
+  let headline = `«${best.name}: надёжная игра на протяжении всех ${best.min} минут»`;
+  if (best.goals >= 3) {
+    headline = `«${best.name} оформил хет-трик в матче ${homeName} — ${awayName}!»`;
+  } else if (best.goals === 2) {
+    headline = `«${best.name} оформил дубль и стал главным героем встречи ${homeName} — ${awayName}»`;
+  } else if (best.goals >= 1 && best.assists >= 1) {
+    headline = `«${best.name} (${best.goals}+${best.assists}) вёл игру команды в матче ${homeName} — ${awayName}»`;
+  } else if (best.goals >= 1) {
+    headline = `«${best.name} забил важнейший мяч и признан лучшим игроком матча»`;
+  } else if (best.assists >= 2) {
+    headline = `«${best.name} отдал ${best.assists} голевые передачи в игре ${homeName} — ${awayName}»`;
+  } else if (best.pos === "ВР" && best.saves >= 3) {
+    headline = `«${best.name} совершил ${best.saves} сейвов и спас команду в ключевых эпизодах»`;
+  } else if (best.tackles >= 3) {
+    headline = `«${best.name} выиграл ключевые единоборства (${best.tackles} отборов) и закрыл свою зону»`;
+  }
+  const sideCoach = best.side === "away" ? coachAway : coachHome;
+  const tacticsLine = sideCoach?.name
+    ? `Установка ${sideCoach.name} сработала: мы действовали компактно и знали, как использовать слабые зоны соперника.`
+    : `Установка тренера была предельно ясной: дисциплина в обороне и быстрые решения при переходе в атаку.`;
   return {
     ...best,
+    pid: best.playerId,
     teamName: best.team,
-    headline: `\xAB${best.name}: \u0438\u0433\u0440\u0430 \u0431\u044B\u043B\u0430 \u043D\u0430\u043F\u0440\u044F\u0436\u0451\u043D\u043D\u043E\u0439 \u0434\u043E \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0445 \u043C\u0438\u043D\u0443\u0442\xBB`,
+    teamLogo: teamLogo(best.teamId),
+    headline,
     interview: {
-      headline: `\xAB${best.name}: \u0438\u0433\u0440\u0430 \u0431\u044B\u043B\u0430 \u043D\u0430\u043F\u0440\u044F\u0436\u0451\u043D\u043D\u043E\u0439 \u0434\u043E \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0445 \u043C\u0438\u043D\u0443\u0442\xBB`,
-      quote: `\u041C\u044B \u0433\u043E\u0442\u043E\u0432\u0438\u043B\u0438\u0441\u044C \u043A \u0442\u0440\u0443\u0434\u043D\u043E\u043C\u0443 \u043C\u0430\u0442\u0447\u0443, \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A \u043E\u043A\u0430\u0437\u0430\u043B \u0441\u0435\u0440\u044C\u0435\u0437\u043D\u043E\u0435 \u0441\u043E\u043F\u0440\u043E\u0442\u0438\u0432\u043B\u0435\u043D\u0438\u0435. \u0420\u0430\u0434\u044B \u043F\u043E\u0431\u0435\u0434\u0435 \u0438 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0435 \u0442\u0440\u0438\u0431\u0443\u043D!`,
-      tacticsComment: `\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u0442\u0440\u0435\u043D\u0435\u0440\u0430 \u0431\u044B\u043B\u0430 \u044F\u0441\u043D\u0430: \u043D\u0430\u0434\u0451\u0436\u043D\u043E\u0441\u0442\u044C \u0441\u0437\u0430\u0434\u0438 \u0438 \u043E\u0441\u0442\u0440\u043E\u0442\u0430 \u0432\u043F\u0435\u0440\u0435\u0434\u0438.`,
+      headline,
+      quote: `Мы настраивались на тяжёлую борьбу в матче против серьёзного соперника (${homeName} ${hg}:${ag} ${awayName}). Рад, что удалось помочь команде и порадовать трибуны!`,
+      tacticsComment: tacticsLine,
       mood: "satisfied"
     }
   };
@@ -5796,12 +6036,14 @@ function fixLineup(L, tid, f, allowLoan = false) {
   const slotResult = assignFormationSlots(fm, finalStarters, L.slots);
   const allValidIds = new Set([...ownIds, ...loaned.map((p) => p.id)]);
   const mergedRoles = { ...normalizeRoles(db.tactics?.[tid]?.roles, allValidIds), ...normalizeRoles(L.roles, allValidIds) };
+  const plannedSubs = normalizePlannedSubs(L.plannedSubs, finalStarters, finalBench);
   return {
     formation: fm,
     starters: finalStarters,
     bench: finalBench,
     slots: slotResult.entries.map((e) => ({ slot: e.slotPos, pid: e.pid })),
     roles: mergedRoles,
+    plannedSubs,
     speech: L.speech || "",
     training: L.training || ""
   };
@@ -6404,6 +6646,24 @@ ${tiredNotes("away", A)}
 - ПРАВИЛО СТАНДАРТОВ: Если в составе назначены исполнители (пенальти, ближний/дальний штрафной, штрафные справа/слева, угловые справа/слева), именно ОНИ должны подходить к мячу и исполнять соответствующие стандарты, пока находятся на поле (не размазывай угловые, штрафные и пенальти случайно по случайным игрокам!). Если штатный исполнитель заменён/удалён или остался в запасе — обязанность переходит партнёру по стандартам, а при выходе со скамейки он забирает её себе. Капитан активно общается с судьёй и заводит партнёров!
 
 `;
+    const formatPlannedSubsText = (s: string) => {
+      const list = ctx.lineup[s]?.plannedSubs || [];
+      if (!list.length) return "не заданы (замены по ходу игры и усталости)";
+      return list.map((ps: any) => {
+        const outNm = ctx.names?.[ps.outPid] || player(ps.outPid)?.name || ps.outPid;
+        const inNm = ctx.names?.[ps.inPid] || player(ps.inPid)?.name || ps.inPid;
+        const condTxt = SUB_COND_LABELS[ps.condition] || "при любом счёте";
+        return `${ps.minute}' — выходит ${inNm} вместо ${outNm} (${condTxt}${ps.note ? `; ${ps.note}` : ""})`;
+      }).join("; ");
+    };
+    if ((ctx.lineup.home?.plannedSubs?.length || 0) > 0 || (ctx.lineup.away?.plannedSubs?.length || 0) > 0) {
+      u += `7.4. ПЛАНОВЫЕ ЗАМЕНЫ ТРЕНЕРА:
+- ${H}: ${formatPlannedSubsText("home")}
+- ${A}: ${formatPlannedSubsText("away")}
+- ПРАВИЛО ПЛАНОВЫХ ЗАМЕН: Если для команды заданы плановые замены и уходящий игрок ещё на поле (не удалён и не заменён ранее), а условие счёта/усталости выполняется на указанной минуте (в рамках лимита 5 замен в 3 окна) — ОБЯЗАТЕЛЬНО проведи указанную замену (type: "sub", players: [выходящий, уходящий]) около указанной минуты!
+
+`;
+    }
   }
   u += `8. \u0421\u041E\u0421\u0422\u0410\u0412\u042B \u0418 \u041F\u0420\u041E\u0424\u0418\u041B\u0418 \u0418\u0413\u0420\u041E\u041A\u041E\u0412 (\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0438\u0441\u043A\u043B\u044E\u0447\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u044D\u0442\u0438\u0445 \u0438\u0433\u0440\u043E\u043A\u043E\u0432):
 `;
@@ -6793,14 +7053,50 @@ function fakePeriod(a, b, ctx, prev) {
   const ev = [], R = rng(ctx.fid + a), pick = (arr) => arr[Math.floor(R() * arr.length)];
   const st = deriveState(prev, ctx);
   const off = new Set(st.off);
-  const onP = (s) => Object.keys(ctx.names).filter((p) => ctx.pidSide[p] === s && ctx.lineup[s].starters.includes(p) && !off.has(ctx.names[p]));
-  const push = (min, sec, team2, type, pl, text, x) => {
+  const onPitch = { home: new Set<string>(ctx.lineup.home.starters || []), away: new Set<string>(ctx.lineup.away.starters || []) };
+  const subbedIn = new Set<string>();
+  for (const e of prev) {
+    if (e.type === "red" && e.pids?.[0] && ctx.pidSide[e.pids[0]]) onPitch[ctx.pidSide[e.pids[0]]].delete(e.pids[0]);
+    if (e.type === "injury" && e.pids?.[0] && (e.out_days === void 0 || e.out_days > 0) && ctx.pidSide[e.pids[0]]) onPitch[ctx.pidSide[e.pids[0]]].delete(e.pids[0]);
+    if (e.type === "sub") {
+      if (e.pids?.[1] && ctx.pidSide[e.pids[1]]) onPitch[ctx.pidSide[e.pids[1]]].delete(e.pids[1]);
+      if (e.pids?.[0] && ctx.pidSide[e.pids[0]]) { onPitch[ctx.pidSide[e.pids[0]]].add(e.pids[0]); subbedIn.add(e.pids[0]); }
+    }
+  }
+  const score = [...st.score];
+  const subsCnt = { ...st.subs };
+  const subTimes = { home: [...st.subT.home], away: [...st.subT.away] };
+  const onP = (s) => [...onPitch[s]].filter((p) => !off.has(ctx.names[p]));
+  const push = (min, sec, team2, type, pl, text, x?: any) => {
     const o = { min, sec, team: team2, type, players: pl.map((p) => ctx.names[p]), pids: pl, text, ...x };
+    if (type === "goal" || type === "own_goal") score[team2 === "home" ? 0 : 1]++;
     ev.push(o);
   };
   if (a === 1 || a === 46) push(a, 0, "none", "kickoff", [], a === 1 ? "Начали! Мяч в игре." : "Начался второй тайм.");
   let hold = R() < 0.5 ? "home" : "away";
   for (let m = a; m <= b; m++) {
+    for (const sideKey of ["home", "away"]) {
+      const pSubs = ctx.lineup?.[sideKey]?.plannedSubs || [];
+      for (const ps of pSubs) {
+        if (ps.minute !== m) continue;
+        if (!onPitch[sideKey].has(ps.outPid) || subbedIn.has(ps.inPid)) continue;
+        const myG = sideKey === "home" ? score[0] : score[1];
+        const opG = sideKey === "home" ? score[1] : score[0];
+        const cond = ps.condition || "always";
+        if (cond === "winning" && !(myG > opG)) continue;
+        if (cond === "losing" && !(myG < opG)) continue;
+        if (cond === "drawing" && !(myG === opG)) continue;
+        if (cond === "not_winning" && !(myG <= opG)) continue;
+        const nextTimes = [...subTimes[sideKey], m * 60 + 2];
+        if (subsCnt[sideKey] + 1 > SUB_MAX_PLAYERS || subWindows(nextTimes) > SUB_MAX_WINDOWS) continue;
+        subsCnt[sideKey]++;
+        subTimes[sideKey].push(m * 60 + 2);
+        onPitch[sideKey].delete(ps.outPid);
+        onPitch[sideKey].add(ps.inPid);
+        subbedIn.add(ps.inPid);
+        push(m, 2, sideKey, "sub", [ps.inPid, ps.outPid], `Плановая замена у ${ctx.sides[sideKey].name}: ${ctx.names[ps.inPid]} выходит вместо ${ctx.names[ps.outPid]}.`);
+      }
+    }
     const s = hold, o = s === "home" ? "away" : "home", P = onP(s), Q = onP(o);
     if (!P.length || !Q.length) continue;
     
@@ -6964,7 +7260,7 @@ function computeStats(events, ctx) {
   const t = { home: mk(), away: mk() }, P = {}, posT = { home: 0, away: 0 };
   const pl = (pid) => {
     if (!pid) return {};
-    return P[pid] ||= { n: ctx.names[pid], t: ctx.pidTeam[pid], side: ctx.pidSide[pid], min: 0, g: 0, a: 0, yc: 0, rc: 0, tk: 0, sv: 0, sh: 0, xg: 0, ff: 0, fa: 0, cs: 0 };
+    return P[pid] ||= { id: pid, n: ctx.names[pid], t: ctx.pidTeam[pid], side: ctx.pidSide[pid], min: 0, g: 0, a: 0, yc: 0, rc: 0, tk: 0, sv: 0, sh: 0, xg: 0, ff: 0, fa: 0, cs: 0 };
   };
   const start = {}, end = {};
   for (const s of ["home", "away"]) {
@@ -6977,7 +7273,7 @@ function computeStats(events, ctx) {
   events.forEach((e, i) => {
     const s = e.team, o = s === "home" ? "away" : "home", ok = s === "home" || s === "away", T = ok ? t[s] : null, To = ok ? t[o] : null;
     if (ok && playT.has(e.type) && events[i + 1]) T && (posT[s] += clamp(events[i + 1].min * 60 + events[i + 1].sec - (e.min * 60 + e.sec), 0, 75));
-    const p0 = e.pids[0], p1 = e.pids[1];
+    const p0 = e.pids?.[0], p1 = e.pids?.[1];
     switch (e.type) {
       case "shot":
         if (ok) {
@@ -7339,7 +7635,7 @@ function finish(id) {
   const cH = getCoachForTeam(f.home), cA = getCoachForTeam(f.away);
   m.ratings = computeMatchRatings(m, f, HName, AName);
   m.motm = getMatchMotm(m, f, HName, AName, cH, cA);
-  if (m.motm) f.motm = { pid: m.motm.pid, name: m.motm.name, rating: m.motm.rating };
+  if (m.motm) f.motm = { pid: m.motm.pid, name: m.motm.name, pos: m.motm.pos, teamId: m.motm.teamId, teamName: m.motm.teamName, rating: m.motm.rating };
   putMatch(id, m);
   if ((f.comp === "cup" || f.comp === "supercup") && f.hg === f.ag && !f.pen) f.pen = shootout(f);
   checkPlayoffShootout(f);
@@ -9517,14 +9813,39 @@ app.get("/api/match/:id", (req, res) => {
   const HName = tn(f.home), AName = tn(f.away);
   const coachHome = getCoachForTeam(f.home);
   const coachAway = getCoachForTeam(f.away);
-  const rawMotm = m?.motm || (f.status === "done" && m ? getMatchMotm(m, f, HName, AName, coachHome, coachAway) : f.motm ? { ...f.motm, teamName: HName, pos: "\u041D\u0410\u041F", interview: { headline: `\xAB${f.motm.name}: \u0438\u0433\u0440\u0430 \u0431\u044B\u043B\u0430 \u043D\u0430\u043F\u0440\u044F\u0436\u0451\u043D\u043D\u043E\u0439 \u0434\u043E \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0445 \u043C\u0438\u043D\u0443\u0442\xBB`, quote: `\u041C\u044B \u0433\u043E\u0442\u043E\u0432\u0438\u043B\u0438\u0441\u044C \u043A \u0442\u0440\u0443\u0434\u043D\u043E\u043C\u0443 \u043C\u0430\u0442\u0447\u0443, \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A \u043E\u043A\u0430\u0437\u0430\u043B \u0441\u0435\u0440\u044C\u0435\u0437\u043D\u043E\u0435 \u0441\u043E\u043F\u0440\u043E\u0442\u0438\u0432\u043B\u0435\u043D\u0438\u0435. \u0420\u0430\u0434\u044B \u043F\u043E\u0431\u0435\u0434\u0435 \u0438 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0435 \u0442\u0440\u0438\u0431\u0443\u043D!`, tacticsComment: `\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u0442\u0440\u0435\u043D\u0435\u0440\u0430 \u0431\u044B\u043B\u0430 \u044F\u0441\u043D\u0430: \u043D\u0430\u0434\u0451\u0436\u043D\u043E\u0441\u0442\u044C \u0441\u0437\u0430\u0434\u0438 \u0438 \u043E\u0441\u0442\u0440\u043E\u0442\u0430 \u0432\u043F\u0435\u0440\u0435\u0434\u0438.`, mood: "satisfied" } } : null);
+  const isValidMotm = (x: any) => !!(x && x.name && x.name !== "Лучший игрок матча" && x.playerId !== "motm_1");
+  let rawMotm = isValidMotm(m?.motm) ? m.motm : null;
+  if (!rawMotm && f.status === "done" && m) {
+    rawMotm = getMatchMotm(m, f, HName, AName, coachHome, coachAway);
+  }
+  if (!rawMotm && isValidMotm(f.motm)) {
+    const mp = f.motm.pid ? player(f.motm.pid) : null;
+    const mTid = f.motm.teamId || mp?.teamId || f.home;
+    const mTeamName = f.motm.teamName || (mTid ? tn(mTid) : HName);
+    rawMotm = {
+      ...f.motm,
+      teamId: mTid,
+      teamName: mTeamName,
+      pos: f.motm.pos || mp?.pos || "ЦП",
+      interview: {
+        headline: `«${f.motm.name}: игра была напряжённой до последних минут»`,
+        quote: `Мы готовились к трудному матчу, соперник оказал серьезное сопротивление. Рады победе и поддержке трибун!`,
+        tacticsComment: `Установка тренера была ясна: надёжность сзади и острота впереди.`,
+        mood: "satisfied"
+      }
+    };
+  }
   let motmOut = null;
   if (rawMotm) {
+    const mp = (rawMotm.pid || rawMotm.playerId) ? player(rawMotm.pid || rawMotm.playerId) : null;
+    const resolvedTid = rawMotm.teamId || rawMotm.player?.teamId || mp?.teamId || (rawMotm.side === "away" ? f.away : f.home);
+    const resolvedTeamName = rawMotm.teamName || rawMotm.team || rawMotm.player?.team || (resolvedTid ? tn(resolvedTid) : HName);
     const p = rawMotm.player || {
-      id: rawMotm.pid || rawMotm.id,
-      name: rawMotm.name,
-      pos: rawMotm.pos || "\u041D\u0410\u041F",
-      team: rawMotm.teamName || rawMotm.team || HName,
+      id: rawMotm.pid || rawMotm.id || rawMotm.playerId,
+      name: rawMotm.name || mp?.name || "Игрок",
+      pos: rawMotm.pos || mp?.pos || "ЦП",
+      teamId: resolvedTid,
+      team: resolvedTeamName,
       rating: rawMotm.rating || "7.5",
       goals: rawMotm.goals || 0,
       assists: rawMotm.assists || 0,
@@ -9532,18 +9853,28 @@ app.get("/api/match/:id", (req, res) => {
       xg: rawMotm.xg,
       shots: rawMotm.shots,
       tackles: rawMotm.tackles,
-      teamLogo: rawMotm.teamLogo || teamLogo(rawMotm.teamId)
+      teamLogo: rawMotm.teamLogo || teamLogo(resolvedTid)
     };
     motmOut = {
       ...rawMotm,
       player: p,
       name: rawMotm.name || p.name,
       rating: rawMotm.rating || p.rating,
-      headline: rawMotm.headline || rawMotm.interview?.headline || `\xAB${p.name}: \u043A\u043E\u043C\u0430\u043D\u0434\u043D\u0430\u044F \u0440\u0430\u0431\u043E\u0442\u0430 \u043F\u0440\u0438\u043D\u0435\u0441\u043B\u0430 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\xBB`,
-      quote: rawMotm.quote || rawMotm.interview?.quote || `\u041C\u044B \u043F\u0440\u043E\u0432\u0435\u043B\u0438 \u043E\u0442\u043B\u0438\u0447\u043D\u044B\u0439 \u043C\u0430\u0442\u0447 \u0438 \u0431\u0438\u043B\u0438\u0441\u044C \u0437\u0430 \u043A\u0430\u0436\u0434\u044B\u0439 \u043C\u044F\u0447. \u0421\u043F\u0430\u0441\u0438\u0431\u043E \u0431\u043E\u043B\u0435\u043B\u044C\u0449\u0438\u043A\u0430\u043C \u0437\u0430 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0443!`,
+      headline: rawMotm.headline || rawMotm.interview?.headline || `«${p.name}: командная работа принесла результат»`,
+      quote: rawMotm.quote || rawMotm.interview?.quote || `Мы провели отличный матч и бились за каждый мяч. Спасибо болельщикам за поддержку!`,
       coachTacticsReflection: rawMotm.coachTacticsReflection || rawMotm.interview?.tacticsComment || ""
     };
   }
+  const hasStoredRatings = Array.isArray(m?.ratings) && m.ratings.length > 0;
+  let ratingsList: any[] = [];
+  if (m && (f.status === "live" || f.status === "done")) {
+    const evSlice = f.status === "live" ? m.events.slice(0, f.pos) : m.events;
+    const stObj = f.status === "done" ? (m.stats || f.st || computeStats(evSlice, m.ctx)) : computeStats(evSlice, m.ctx);
+    ratingsList = f.status === "done" && hasStoredRatings
+      ? m.ratings
+      : computeMatchRatings({ ...m, events: evSlice, stats: stObj }, f, HName, AName);
+  }
+  const ratingsMap = Object.fromEntries(ratingsList.map((r: any) => [r.playerId || r.id, r]));
   const out = {
     fixture: pubFx(f),
     events: [],
@@ -9554,7 +9885,8 @@ app.get("/api/match/:id", (req, res) => {
     err: isAdm ? f.err : void 0,
     fallback: !!f.fallback,
     motm: motmOut,
-    ratings: m?.ratings || (f.status === "done" && m ? computeMatchRatings(m, f, HName, AName) : []),
+    ratings: ratingsMap,
+    ratingsList,
     coaches: {
       home: { coach: coachHome, staff: getStaffForTeam(f.home) },
       away: { coach: coachAway, staff: getStaffForTeam(f.away) }
@@ -9563,7 +9895,7 @@ app.get("/api/match/:id", (req, res) => {
   };
   if (m && (f.status === "live" || f.status === "done")) {
     out.events = f.status === "live" ? m.events.slice(0, f.pos) : m.events;
-    out.stats = f.status === "done" ? m.stats : computeStats(out.events, m.ctx);
+    out.stats = f.status === "done" ? (m.stats || computeStats(out.events, m.ctx)) : computeStats(out.events, m.ctx);
     const show = isAdm || f.status === "done" || f.status === "live";
     if (m.ctx?.lineup) {
       out.lineups = {};
@@ -9580,17 +9912,25 @@ app.get("/api/match/:id", (req, res) => {
             roleNames: Object.fromEntries(
               Object.entries(m.ctx.roles?.[s] || L.roles || {}).map(([k, pid]) => [k, m.ctx.names?.[pid as string] || player(pid as string)?.name || String(pid)])
             ),
-            speech: canSeeTactics ? L.speech || "(\u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u043D\u0435 \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0430)" : void 0,
+            speech: canSeeTactics ? L.speech || "(установка не заполнена)" : void 0,
             training: canSeeTactics ? L.training || "" : void 0,
+            plannedSubs: canSeeTactics || f.status === "done"
+              ? (L.plannedSubs || []).map((ps: any) => ({
+                  ...ps,
+                  outName: m.ctx.names?.[ps.outPid] || player(ps.outPid)?.name || ps.outPid,
+                  inName: m.ctx.names?.[ps.inPid] || player(ps.inPid)?.name || ps.inPid,
+                  conditionLabel: SUB_COND_LABELS[ps.condition] || "при любом счёте"
+                }))
+              : void 0,
             starters: (L.starters || []).map((id) => ({
               id,
-              name: m.ctx.names?.[id] || player(id)?.name || "\u0418\u0433\u0440\u043E\u043A",
+              name: m.ctx.names?.[id] || player(id)?.name || "Игрок",
               pos: m.ctx.pos?.[id] || player(id)?.pos || "",
               slotPos: m.ctx.slotPos?.[id] || void 0,
               fitSeverity: m.ctx.slotFit?.[id]?.severity || void 0,
               loan: m.ctx.loan?.[id] || void 0
             })),
-            bench: (L.bench || []).map((id) => ({ id, name: m.ctx.names?.[id] || player(id)?.name || "\u0418\u0433\u0440\u043E\u043A", pos: m.ctx.pos?.[id] || player(id)?.pos || "", loan: m.ctx.loan?.[id] || void 0 }))
+            bench: (L.bench || []).map((id) => ({ id, name: m.ctx.names?.[id] || player(id)?.name || "Игрок", pos: m.ctx.pos?.[id] || player(id)?.pos || "", loan: m.ctx.loan?.[id] || void 0 }))
           };
         }
       }
@@ -12354,25 +12694,30 @@ app.post("/api/club/lineup", needClub, (req, res) => {
   const bench = benchIds0;
   const slotRes = assignFormationSlots(fm, st, req.body.slots);
   const roles = normalizeRoles(req.body.roles, sq);
+  const plannedSubs = normalizePlannedSubs(req.body.plannedSubs, st, bench);
   const L = {
     formation: fm,
     starters: st,
     bench,
     slots: slotRes.entries.map((e) => ({ slot: e.slotPos, pid: e.pid })),
     roles,
+    plannedSubs,
     speech: String(req.body.speech || "").slice(0, 4e3),
     training: String(req.body.training || "").slice(0, 4e3),
     at: Date.now()
   };
   db.lineups[f.id + ":" + req.tid] = L;
+  const ownStarters = L.starters.filter((id) => ownIds.has(id));
+  const ownBench = L.bench.filter((id) => ownIds.has(id));
   db.tactics[req.tid] = {
     ...L,
-    starters: L.starters.filter((id) => ownIds.has(id)),
-    bench: L.bench.filter((id) => ownIds.has(id)),
-    roles: normalizeRoles(roles, ownIds)
+    starters: ownStarters,
+    bench: ownBench,
+    roles: normalizeRoles(roles, ownIds),
+    plannedSubs: normalizePlannedSubs(plannedSubs, ownStarters, ownBench)
   };
   save();
-  res.json({ ok: 1, slots: L.slots, roles: L.roles });
+  res.json({ ok: 1, slots: L.slots, roles: L.roles, plannedSubs: L.plannedSubs });
 });
 app.post("/api/club/roles", needClub, (req, res) => {
   const ownIds = new Set(squadOf(req.tid).map((p) => p.id));
@@ -13213,11 +13558,15 @@ app.get("/api/admin/lineups/:fid", admin, (req, res) => {
     const slotRes = assignFormationSlots(L.formation || "4-3-3", L.starters || [], L.slots);
     const rolesObj = normalizeRoles(L.roles || db.tactics[f[s]]?.roles);
     const roleLabelsList = ROLE_KEYS.filter((k) => rolesObj[k]).map((k) => `${ROLE_LABELS[k]}: ${player(rolesObj[k])?.name || rolesObj[k]}`);
+    const plannedSubsSummary = (L.plannedSubs || []).map((ps: any) =>
+      `${ps.minute}' ${player(ps.inPid)?.name || ps.inPid} ← ${player(ps.outPid)?.name || ps.outPid} (${SUB_COND_LABELS[ps.condition] || "при любом счёте"})`
+    );
     o[s] = {
       team: tn(f[s]),
       logo: teamLogo(f[s]),
       ...L,
       roleSummary: roleLabelsList,
+      plannedSubsSummary,
       slotMismatches: slotRes.entries.filter((e) => e.fit.severity === "forced" || e.fit.severity === "critical").map((e) => `${player(e.pid)?.name || e.pid}: ${e.naturalPos} -> ${e.slotPos}`),
       starters: L.starters.map((id) => player(id)?.name + (loanFromName(f[s], id) ? ` (\u0438\u0437 \xAB${loanFromName(f[s], id)}\xBB)` : "")),
       bench: L.bench.map((id) => player(id)?.name + (loanFromName(f[s], id) ? ` (\u0438\u0437 \xAB${loanFromName(f[s], id)}\xBB)` : ""))
@@ -16343,7 +16692,9 @@ export {
   buildFallbackDrawScript,
   buildUser,
   cardLine,
+  computeMatchRatings,
   computePlayerFatigue,
+  computeStats,
   db,
   determineSuperCupTeams,
   ensureDualTimes,
@@ -16357,6 +16708,7 @@ export {
   getAvailableSeasons,
   getCupWinnerForSeason,
   getLineup,
+  getMatchMotm,
   getPreviousSeason,
   getSuperCupVenue,
   getTableForSeason,
@@ -16364,6 +16716,7 @@ export {
   isFinalMatch,
   lineText,
   normalizeEvents,
+  normalizePlannedSubs,
   realAt,
   runAutoStartTick
 };
