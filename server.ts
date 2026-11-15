@@ -4261,6 +4261,51 @@ var ruDateStr = (d) => {
   const [y, m, dd] = String(d || "").split("-");
   return y && m && dd ? `${dd}.${m}.${y}` : String(d || "");
 };
+function normalizeLoanUntil(raw: any): string | null {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  let iso = "";
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    iso = `${m[1]}-${m[2]}-${m[3]}`;
+  } else {
+    m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (m) iso = `${m[3]}-${m[2]}-${m[1]}`;
+  }
+  if (!iso) return null;
+  const yr = +iso.slice(0, 4);
+  const mo = +iso.slice(5, 7);
+  const dy = +iso.slice(8, 10);
+  if (yr < 1990 || yr > 2100 || mo < 1 || mo > 12 || dy < 1 || dy > 31) return null;
+  const check = new Date(Date.UTC(yr, mo - 1, dy));
+  if (check.getUTCFullYear() !== yr || check.getUTCMonth() + 1 !== mo || check.getUTCDate() !== dy) return null;
+  return iso;
+}
+function computeLoanUntil(opts: { transferType?: any; loanUntil?: any; note?: any; season?: any; baseDate?: any } = {}): string {
+  const explicit = normalizeLoanUntil(opts.loanUntil);
+  if (explicit) return explicit;
+  const base = normalizeLoanUntil(opts.baseDate) || todayMsk();
+  const baseYr = +base.slice(0, 4);
+  const baseMo = +base.slice(5, 7);
+  const seasonStr = String(opts.season || S() || `${baseYr}/${String(baseYr + 1).slice(-2)}`);
+  const sm = seasonStr.match(/^(\d{4})/);
+  const startYr = sm ? +sm[1] : (baseMo >= 6 ? baseYr : baseYr - 1);
+  const endYr = startYr + 1;
+  const tt = String(opts.transferType || "").toLowerCase();
+  const note = String(opts.note || "").toLowerCase();
+  if (tt === "loan_2" || /\b2\s*(?:год|лет|г\.)/.test(note)) {
+    return `${endYr + 1}-06-30`;
+  }
+  if (tt === "loan_1.5" || /1[.,]5\s*(?:год|г\.)/.test(note)) {
+    return baseMo >= 6 ? `${endYr}-12-31` : `${endYr + 1}-06-30`;
+  }
+  if (tt === "loan_0.5" || /0[.,]5\s*(?:год|г\.)|полгода/.test(note)) {
+    if (baseMo >= 6 && baseMo <= 11) return `${startYr}-12-31`;
+    return baseMo === 12 ? `${baseYr + 1}-06-30` : `${endYr}-06-30`;
+  }
+  if (base >= `${endYr}-05-15`) return `${endYr + 1}-06-30`;
+  return `${endYr}-06-30`;
+}
 function daysLabel(d) {
   d = Math.max(1, Math.round(d));
   if (d >= 45) {
@@ -4458,8 +4503,14 @@ function executeTransferIfBothApproved(t) {
       const isMandatoryBuyout = !!(t.mandatoryBuyoutOnRplRetention || t.mandatoryBuyout || t.type === "loan_mandatory_rpl");
       const loanCond = t.loanCondition || (isMandatoryBuyout ? "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0438\u0441\u043A\u0438 \u0432 \u0420\u041F\u041B" : null);
       if (t.type === "loan" || isMandatoryBuyout) {
+        const resolvedUntil = normalizeLoanUntil(t.loanUntil) || computeLoanUntil({
+          transferType: t.transferType || t.type,
+          note: t.note,
+          baseDate: t.date
+        });
         p.loanFrom = t.fromName || (t.from ? tn(t.from) : "\u041A\u043B\u0443\u0431");
-        p.loanFromId = t.from;
+        p.loanFromId = t.from || null;
+        p.loanUntil = resolvedUntil;
         p.loanTerm = t.note || (isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${t.buyoutFee || "\u20AC8.0M"})${loanCond ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCond}\xBB` : ""}` : "\u0410\u0440\u0435\u043D\u0434\u0430");
         if (isMandatoryBuyout) {
           p.mandatoryBuyoutOnRplRetention = true;
@@ -4471,6 +4522,7 @@ function executeTransferIfBothApproved(t) {
         delete p.loanFrom;
         delete p.loanFromId;
         delete p.loanTerm;
+        delete p.loanUntil;
         delete p.mandatoryBuyoutOnRplRetention;
         delete p.mandatoryBuyout;
         delete p.buyoutFee;
@@ -9463,7 +9515,10 @@ var pubPlayer = (p) => ({
   banLabel: p.banLabel || "",
   yellowCycle: (p.seasonYC || 0) % 4,
   loanFrom: p.loanFrom || null,
+  loanFromId: p.loanFromId || null,
   loanTerm: p.loanTerm || null,
+  loanUntil: normalizeLoanUntil(p.loanUntil) || null,
+  loanUntilText: normalizeLoanUntil(p.loanUntil) ? ruDateStr(normalizeLoanUntil(p.loanUntil)) : null,
   mandatoryBuyoutOnRplRetention: !!p.mandatoryBuyoutOnRplRetention,
   buyoutFee: p.buyoutFee || null,
   loanCondition: p.loanCondition || null,
@@ -11832,6 +11887,11 @@ app.get("/api/club", needClub, (req, res) => {
     ...(isAdmin ? { fatigueRefDate: refDate } : {}),
     roster: ro.map(mapClubPlayer),
     squad: sq.map(mapClubPlayer),
+    loanedOut: (db.players || []).filter((p) => p.loanFromId === req.tid && p.teamId !== req.tid).map((p) => ({
+      ...pubPlayer(p),
+      loanedTo: p.teamId ? tn(p.teamId) : null,
+      loanedToId: p.teamId || null
+    })),
     tactic: db.tactics[req.tid] || null,
     upcoming: upcomingWithFatigue,
     transfers: db.transfers.filter((x) => x.to === req.tid).slice(-10),
@@ -11900,7 +11960,10 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
           return fail(res, "\u0418\u0433\u0440\u043E\u043A \u0434\u043B\u044F \u043E\u0431\u043C\u0435\u043D\u0430 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0438\u0437 \u0441\u043E\u0441\u0442\u0430\u0432\u0430 \u0432\u0430\u0448\u0435\u0433\u043E \u043A\u043B\u0443\u0431\u0430");
         }
       }
-      let note = String(req.body.note || (isExchange ? `\u041E\u0431\u043C\u0435\u043D \u043D\u0430 ${exchangeP?.name || "\u0438\u0433\u0440\u043E\u043A\u0430"}${feeNum > 0 ? ` + \u0434\u043E\u043F\u043B\u0430\u0442\u0430 ${feeStr}` : ""}` : isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${buyoutFeeStr})${loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCondition}\xBB` : ""}` : isLoan ? "\u0410\u0440\u0435\u043D\u0434\u0430" : "\u041F\u043E\u043B\u043D\u043E\u0446\u0435\u043D\u043D\u044B\u0439 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440")).slice(0, 300);
+      const rawTransferType = String(req.body.transferType || req.body.type || "");
+      const resolvedLoanUntil = isLoan ? computeLoanUntil({ transferType: rawTransferType, loanUntil: req.body.loanUntil, baseDate: todayMsk() }) : null;
+      const loanTermTag = rawTransferType === "loan_0.5" ? "\u0410\u0440\u0435\u043D\u0434\u0430 (0.5 \u0433\u043E\u0434\u0430)" : rawTransferType === "loan_1" ? "\u0410\u0440\u0435\u043D\u0434\u0430 (1 \u0433\u043E\u0434)" : "\u0410\u0440\u0435\u043D\u0434\u0430";
+      let note = String(req.body.note || (isExchange ? `\u041E\u0431\u043C\u0435\u043D \u043D\u0430 ${exchangeP?.name || "\u0438\u0433\u0440\u043E\u043A\u0430"}${feeNum > 0 ? ` + \u0434\u043E\u043F\u043B\u0430\u0442\u0430 ${feeStr}` : ""}` : isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${buyoutFeeStr})${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}${loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCondition}\xBB` : ""}` : isLoan ? `${loanTermTag}${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}` : "\u041F\u043E\u043B\u043D\u043E\u0446\u0435\u043D\u043D\u044B\u0439 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440")).slice(0, 300);
       if (sellOnPct > 0 && !note.includes("Sell-on")) {
         note += ` \xB7 Sell-on clause ${sellOnPct}% \u0441 \u0431\u0443\u0434\u0443\u0449\u0435\u0439 \u043F\u0435\u0440\u0435\u043F\u0440\u043E\u0434\u0430\u0436\u0438`;
       }
@@ -11916,6 +11979,8 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
         fee: feeStr,
         feeAmount: feeNum,
         type: isExchange ? "exchange" : isMandatoryBuyout ? "loan_mandatory_rpl" : isLoan ? "loan" : "transfer",
+        transferType: rawTransferType || (isLoan ? "loan" : "transfer"),
+        loanUntil: resolvedLoanUntil,
         mandatoryBuyoutOnRplRetention: isMandatoryBuyout,
         mandatoryBuyout: isMandatoryBuyout,
         buyoutFee: buyoutFeeStr,
@@ -11943,13 +12008,15 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
         message: isExchange ? `\u041F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u043E\u0431\u043C\u0435\u043D\u0430 (${p.name} \u21C4 ${exchangeP?.name || "\u0438\u0433\u0440\u043E\u043A"}${feeNum > 0 ? ` + ${feeStr}` : ""}) \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0432\u043B\u0430\u0434\u0435\u043B\u044C\u0446\u0443 \xAB${tn(p.teamId)}\xBB \u0438 \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u0443 \u043B\u0438\u0433\u0438.` : isRplToRpl ? `${p.name} \u0447\u0438\u0441\u043B\u0438\u0442\u0441\u044F \u0432 \xAB${tn(p.teamId)}\xBB. \u0417\u0430\u043F\u0440\u043E\u0441 (${feeStr}) \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D \u0432\u043B\u0430\u0434\u0435\u043B\u044C\u0446\u0443 \xAB${tn(p.teamId)}\xBB \u0438 \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u0443 \u043B\u0438\u0433\u0438. \u041F\u0435\u0440\u0435\u0445\u043E\u0434 \u0441\u043E\u0441\u0442\u043E\u0438\u0442\u0441\u044F \u043F\u0440\u0438 \u043E\u0431\u043E\u044E\u0434\u043D\u043E\u043C \u0441\u043E\u0433\u043B\u0430\u0441\u0438\u0438.` : `${p.name} \u0447\u0438\u0441\u043B\u0438\u0442\u0441\u044F \u0432 \xAB${tn(p.teamId)}\xBB. \u0417\u0430\u044F\u0432\u043A\u0430 \u043D\u0430 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0430 \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u0443.`
       });
     }
-    if (req.body.fromForeignClub || req.body.transferType || req.body.mandatoryBuyout || req.body.sellOnPercent) {
+    if (req.body.fromForeignClub || req.body.transferType || req.body.mandatoryBuyout || req.body.sellOnPercent || req.body.loanUntil) {
       const isMand = !!(req.body.mandatoryBuyout || String(req.body.transferType || "").includes("mandatory"));
       const isLn = isMand || String(req.body.transferType || "").includes("loan");
       if (isLn) {
+        const directUntil = computeLoanUntil({ transferType: req.body.transferType, loanUntil: req.body.loanUntil, baseDate: todayMsk() });
         p.loanFrom = req.body.fromForeignClub ? String(req.body.fromForeignClub).trim() : p.loanFrom || null;
+        p.loanUntil = directUntil;
         const cond = String(req.body.loanCondition || req.body.buyoutCondition || "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0438\u0441\u043A\u0438 \u0432 \u0420\u041F\u041B").trim();
-        p.loanTerm = isMand ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0434\u043E \u043A\u043E\u043D\u0446\u0430 \u0441\u0435\u0437\u043E\u043D\u0430 ${S()} (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0432\u044B\u043A\u0443\u043F \u0437\u0430 ${req.body.buyoutFee || "\u20AC8.0M"} \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${cond}\xBB)` : `\u0410\u0440\u0435\u043D\u0434\u0430 \u0434\u043E \u043A\u043E\u043D\u0446\u0430 \u0441\u0435\u0437\u043E\u043D\u0430 ${S()}`;
+        p.loanTerm = isMand ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0434\u043E ${ruDateStr(directUntil)} (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0432\u044B\u043A\u0443\u043F \u0437\u0430 ${req.body.buyoutFee || "\u20AC8.0M"} \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${cond}\xBB)` : `\u0410\u0440\u0435\u043D\u0434\u0430 \u0434\u043E ${ruDateStr(directUntil)}`;
         p.mandatoryBuyoutOnRplRetention = isMand;
         p.mandatoryBuyout = isMand;
         p.buyoutFee = isMand ? String(req.body.buyoutFee || "\u20AC8.0M").trim() : null;
@@ -12547,7 +12614,9 @@ app.post("/api/club/contract/terminate", needClub, (req, res) => {
   p.formerClub = clubName;
   p.releasedAt = todayMsk();
   delete p.loanFrom;
+  delete p.loanFromId;
   delete p.loanTerm;
+  delete p.loanUntil;
   delete p.mandatoryBuyoutOnRplRetention;
   delete p.mandatoryBuyout;
   delete p.buyoutFee;
@@ -13196,6 +13265,28 @@ app.post("/api/admin/player", admin, (req, res) => {
         reason: b.out.reason ? String(b.out.reason).trim() : (b.out.label ? String(b.out.label).trim() : "Травма")
       };
     }
+  }
+  // Аренда:
+  if (b.clearLoan || b.isLoan === false) {
+    delete p.loanFrom;
+    delete p.loanFromId;
+    delete p.loanUntil;
+    delete p.loanTerm;
+    delete p.mandatoryBuyoutOnRplRetention;
+    delete p.mandatoryBuyout;
+    delete p.buyoutFee;
+    delete p.loanCondition;
+  } else if (b.isLoan || b.loanFrom !== void 0 || b.loanUntil !== void 0 || b.loanTerm !== void 0) {
+    if (b.loanFrom !== void 0) p.loanFrom = String(b.loanFrom || "").trim() || null;
+    if (b.loanFromId !== void 0) p.loanFromId = String(b.loanFromId || "").trim() || null;
+    if (b.loanUntil !== void 0) {
+      const lu = normalizeLoanUntil(b.loanUntil);
+      p.loanUntil = lu || null;
+    } else if (b.isLoan && !p.loanUntil) {
+      p.loanUntil = computeLoanUntil({ transferType: "loan", baseDate: todayMsk() });
+    }
+    if (b.loanTerm !== void 0) p.loanTerm = String(b.loanTerm || "").trim() || null;
+    else if (b.isLoan && !p.loanTerm) p.loanTerm = "\u0410\u0440\u0435\u043D\u0434\u0430";
   }
   p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   save();
@@ -15539,7 +15630,8 @@ app.post("/api/admin/transfer/direct", admin, (req, res) => {
   const buyoutFeeStr = isMandatoryBuyout ? sanitizeFeePair(req.body.buyoutFee, feeNum > 0 ? feeStr : "\u20AC1.0M").feeStr : null;
   const loanCondition = isMandatoryBuyout ? String(req.body.loanCondition || req.body.buyoutCondition || "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0438\u0441\u043A\u0438 \u0432 \u0420\u041F\u041B").trim() : null;
   const sellOnPct = Math.min(90, Math.max(0, Number(req.body.sellOnPercent) || 0));
-  let note = isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${buyoutFeeStr})${loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCondition}\xBB` : ""}` : loanMap[transferType] || "\u041F\u043E\u043B\u043D\u043E\u0446\u0435\u043D\u043D\u044B\u0439 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440";
+  const resolvedLoanUntil = isLoan ? computeLoanUntil({ transferType, loanUntil: req.body.loanUntil, baseDate: todayMsk() }) : null;
+  let note = isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${buyoutFeeStr})${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}${loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCondition}\xBB` : ""}` : isLoan ? `${loanMap[transferType] || "\u0410\u0440\u0435\u043D\u0434\u0430"}${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}` : "\u041F\u043E\u043B\u043D\u043E\u0446\u0435\u043D\u043D\u044B\u0439 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440";
   if (sellOnPct > 0) {
     note += ` \xB7 Sell-on clause ${sellOnPct}%`;
   }
@@ -15556,6 +15648,8 @@ app.post("/api/admin/transfer/direct", admin, (req, res) => {
     fee: feeStr,
     feeAmount: feeNum,
     type: isMandatoryBuyout ? "loan_mandatory_rpl" : isLoan ? "loan" : "transfer",
+    transferType,
+    loanUntil: resolvedLoanUntil,
     mandatoryBuyoutOnRplRetention: isMandatoryBuyout,
     mandatoryBuyout: isMandatoryBuyout,
     buyoutFee: buyoutFeeStr,
@@ -15924,6 +16018,8 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
   if (Array.isArray(players) && players.length > 0) {
     itemsToProcess = players.map((p) => {
       const isMand = String(p.transferType || p.type || "").includes("mandatory") || !!p.mandatoryBuyout;
+      const isLn = isMand || String(p.transferType || p.type || "").includes("loan");
+      const tp = isMand ? "loan_mandatory_rpl" : String(p.transferType || p.type || "").includes("loan") ? "loan" : "transfer";
       return {
         name: String(p.playerName || p.name || "").trim(),
         pos: normalizeEuroPos(p.pos),
@@ -15931,7 +16027,8 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
         nationality: String(p.nationality || p.nation || p.country || p.fromCountry || "").trim(),
         fromClub: String(p.fromClub || p.club || p.europeanClub || "").trim(),
         fee: String(p.fee || "€5.0M").trim(),
-        type: isMand ? "loan_mandatory_rpl" : String(p.transferType || p.type || "").includes("loan") ? "loan" : "transfer",
+        type: tp,
+        loanUntil: isLn ? computeLoanUntil({ transferType: tp, loanUntil: p.loanUntil, baseDate: todayMsk() }) : null,
         mandatoryBuyout: isMand,
         buyoutFee: isMand ? String(p.buyoutFee || p.fee || "€8.0M").trim() : void 0,
         loanCondition: isMand ? String(p.loanCondition || p.buyoutCondition || "Сохранение прописки в РПЛ").trim() : void 0,
@@ -15949,6 +16046,13 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       const fullLine = l.toLowerCase();
       const isMand = /сохранении|прописки|mandatory|выкуп|услови/i.test(fullLine);
       const isLoan = isMand || /аренда|loan/i.test(fullLine);
+      const dateMatch = l.match(/(?:до\s+)?(\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4})/i);
+      const parsedLoanUntil = isLoan ? computeLoanUntil({
+        transferType: isMand ? "loan_mandatory_rpl" : "loan",
+        loanUntil: dateMatch ? dateMatch[1] : null,
+        note: l,
+        baseDate: todayMsk()
+      }) : null;
       const sellMatch = fullLine.match(/(?:sell[- ]?on|перепродаж\w*)[^\d]*(\d+)\s*%/i) || fullLine.match(/(\d+)\s*%\s*(?:sell[- ]?on|перепродаж\w*)/i);
       const sellOnPct = sellMatch ? Math.min(90, Math.max(0, Number(sellMatch[1]))) : 0;
       let cond = isMand ? "Сохранение прописки в РПЛ" : void 0;
@@ -15961,6 +16065,9 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       let feePart = "";
       const freeTextTokens = [];
       for (const tok of parts.slice(1)) {
+        if (/^(?:до\s+)?(?:\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4})$/i.test(tok)) {
+          continue;
+        }
         const maybePos = normalizeEuroPos(tok);
         if (!parsedPos && maybePos) {
           parsedPos = maybePos;
@@ -16023,6 +16130,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
         fromClub: parsedClub,
         fee: parsedBatchFee.feeStr,
         type: isMand ? "loan_mandatory_rpl" : isLoan ? "loan" : "transfer",
+        loanUntil: parsedLoanUntil,
         mandatoryBuyout: isMand,
         buyoutFee: isMand ? parsedBatchFee.feeStr : void 0,
         loanCondition: cond,
@@ -16033,6 +16141,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
     const isMand = String(transferType || "").includes("mandatory") || !!req.body.mandatoryBuyout;
     const isLn = isMand || String(transferType || "").includes("loan");
     const parsedSingleFee = sanitizeFeePair(fee, isLn ? "€0" : "€1.0M");
+    const singleType = isMand ? "loan_mandatory_rpl" : String(transferType || "").includes("loan") ? "loan" : "transfer";
     itemsToProcess.push({
       name: String(playerName).trim(),
       pos: normalizeEuroPos(pos),
@@ -16040,7 +16149,8 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       nationality: String(nationality || nation || country || fromCountry || "").trim(),
       fromClub: String(fromClub || club || europeanClub || "").trim(),
       fee: parsedSingleFee.feeStr,
-      type: isMand ? "loan_mandatory_rpl" : String(transferType || "").includes("loan") ? "loan" : "transfer",
+      type: singleType,
+      loanUntil: isLn ? computeLoanUntil({ transferType: singleType, loanUntil: req.body.loanUntil, baseDate: todayMsk() }) : null,
       mandatoryBuyout: isMand,
       buyoutFee: isMand ? sanitizeFeePair(req.body.buyoutFee, parsedSingleFee.feeAmount > 0 ? parsedSingleFee.feeStr : "€1.0M").feeStr : void 0,
       loanCondition: isMand ? String(req.body.loanCondition || req.body.buyoutCondition || "Сохранение прописки в РПЛ").trim() : void 0,
@@ -16075,6 +16185,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       fee: finalFee.feeStr,
       feeAmount: finalFee.feeAmount,
       transferType: item.type,
+      loanUntil: item.loanUntil || null,
       mandatoryBuyoutOnRplRetention: !!item.mandatoryBuyout,
       mandatoryBuyout: !!item.mandatoryBuyout,
       buyoutFee: item.buyoutFee || null,
@@ -16279,6 +16390,7 @@ app.post("/api/admin/transfer-requests/resolve", admin, (req, res) => {
       seasonYC: 0,
       banLeft: 0,
       loanFrom: r.transferType === "loan" || isMand ? r.fromClub : void 0,
+      loanUntil: r.transferType === "loan" || isMand ? (normalizeLoanUntil(r.loanUntil) || computeLoanUntil({ transferType: r.transferType, baseDate: String(r.createdAt || "").slice(0, 10) || todayMsk() })) : void 0,
       loanTerm: isMand ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${r.buyoutFee || r.fee})${r.loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${r.loanCondition}\xBB` : ""}` : r.transferType === "loan" ? r.fee || "\u0410\u0440\u0435\u043D\u0434\u0430" : void 0,
       mandatoryBuyoutOnRplRetention: isMand,
       mandatoryBuyout: isMand,
@@ -16301,6 +16413,7 @@ app.post("/api/admin/transfer-requests/resolve", admin, (req, res) => {
       toName: buyer?.name || r.clubName,
       isForeign: true,
       type: isMand ? "loan_mandatory_rpl" : r.transferType || "transfer",
+      loanUntil: newPlayer.loanUntil || null,
       mandatoryBuyoutOnRplRetention: isMand,
       mandatoryBuyout: isMand,
       buyoutFee: isMand ? r.buyoutFee || r.fee : null,
@@ -16693,6 +16806,7 @@ export {
   buildUser,
   cardLine,
   computeMatchRatings,
+  computeLoanUntil,
   computePlayerFatigue,
   computeStats,
   db,
@@ -16716,6 +16830,7 @@ export {
   isFinalMatch,
   lineText,
   normalizeEvents,
+  normalizeLoanUntil,
   normalizePlannedSubs,
   realAt,
   runAutoStartTick
