@@ -531,7 +531,7 @@ img,svg,video{max-width:100%}
 .eur-tr-title{margin:0;color:#1e3a8a;font-size:16px;font-weight:700}
 .eur-tr-mode-switch{display:inline-flex;gap:6px;flex-wrap:wrap}
 .eur-tr-mode-switch button{font-size:12.5px;padding:7px 12px;min-height:36px}
-.eur-tr-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px 12px;align-items:end}
+.eur-tr-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px 12px;align-items:start}
 .eur-tr-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .eur-tr-field label{margin:0;font-size:12px;font-weight:700;color:#334155;line-height:1.2}
 .eur-tr-field input,.eur-tr-field select{width:100%;min-width:0;box-sizing:border-box;background:#fff;border:1px solid #b9c8be;border-radius:8px;padding:9px 11px;font-size:14.5px;min-height:42px;color:var(--ink)}
@@ -547,11 +547,11 @@ img,svg,video{max-width:100%}
 .eur-tr-span-fee{grid-column:span 4}
 .eur-tr-span-type{grid-column:span 5}
 .eur-tr-span-sellon{grid-column:span 3}
-.eur-tr-span-submit{grid-column:span 4;display:flex;align-items:flex-end}
+.eur-tr-span-submit{grid-column:span 4;display:flex;align-items:flex-end;padding-top:19px}
 .eur-tr-submit{width:100%;min-height:42px;background:#1d4ed8;color:#fff;font-size:14.5px;font-weight:700;border-radius:8px}
 .eur-tr-submit:hover{background:#1e40af}
 .eur-tr-cond-box{display:none;margin-top:12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px}
-.eur-tr-cond-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;align-items:end;margin-top:8px}
+.eur-tr-cond-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;align-items:start;margin-top:8px}
 .eur-tr-cond-main{grid-column:span 8}
 .eur-tr-cond-fee{grid-column:span 4}
 .eur-tr-presets{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;align-items:center}
@@ -560,12 +560,19 @@ img,svg,video{max-width:100%}
 .eur-trq-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#475569;font-size:12.5px;font-weight:600;cursor:pointer;min-height:36px;margin-bottom:0 !important;border-bottom:1px solid #cbd5e1 !important}
 .eur-trq-tabs button:hover{background:#f1f5f9;color:#0f172a;border-radius:8px}
 .eur-trq-tabs button.on{background:#eff6ff;color:#1e3a8a;border-color:#1d4ed8 !important;border-bottom-color:#1d4ed8 !important;font-weight:700;box-shadow:0 1px 2px rgba(29,78,216,0.12)}
+.fee-hint{font-size:12px;font-weight:700;color:#15803d;margin-top:4px;line-height:1.25}
+.fee-hint.zero{color:#475569}
+.fee-hint.err{color:#b91c1c}
+.fee-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.fee-chip{padding:3px 8px;font-size:11.5px;font-weight:700;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155;cursor:pointer;line-height:1.25;min-height:26px}
+.fee-chip:hover{background:#eff6ff;border-color:#1d4ed8;color:#1e3a8a}
 @media(max-width:760px){
   .eur-tr-mode-switch{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .eur-tr-mode-switch button{width:100%}
   .eur-tr-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .eur-tr-span-name,.eur-tr-span-country,.eur-tr-span-club,.eur-tr-span-type,.eur-tr-span-submit,.eur-tr-cond-main,.eur-tr-cond-fee{grid-column:1 / -1}
-  .eur-tr-span-pos,.eur-tr-span-age,.eur-tr-span-fee,.eur-tr-span-sellon{grid-column:span 1}
+  .eur-tr-span-name,.eur-tr-span-country,.eur-tr-span-club,.eur-tr-span-fee,.eur-tr-span-type,.eur-tr-span-submit,.eur-tr-cond-main,.eur-tr-cond-fee{grid-column:1 / -1}
+  .eur-tr-span-pos,.eur-tr-span-age,.eur-tr-span-sellon{grid-column:span 1}
+  .eur-tr-span-submit{padding-top:4px}
   .eur-tr-field input,.eur-tr-field select{font-size:16px !important;min-height:44px;padding:10px 12px}
   .eur-tr-sellon{min-height:44px;padding:0 12px}
   .eur-tr-submit,#tr_batch_send{width:100%;min-height:46px;font-size:15px}
@@ -1533,6 +1540,92 @@ const isBday = (b) => {
   return !!m && m[1] === new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' }).slice(5, 10);
 };
 
+// Понятный разбор и превью трансферных сумм: 1 = €1 000 000 (1 млн €), 1 000 000 / 1000000 = €1 000 000, 500K / 500 тыс = €500 000
+function parseFeeToMillions(raw) {
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || raw < 0) return NaN;
+    if (raw === 0) return 0;
+    const val = raw >= 1000 ? raw / 1_000_000 : raw;
+    return Math.round(val * 1_000_000) / 1_000_000;
+  }
+  let s = String(raw ?? '').trim();
+  if (!s) return NaN;
+  if (/^(0|бесплатно|свободный\s*агент|free)$/i.test(s)) return 0;
+  s = s.replace(/(\d)[\s\u00A0_]+(?=\d)/g, '$1');
+  if (/^\D*\d{1,3}(?:,\d{3})+(?:\.\d+)?\D*$/.test(s)) {
+    s = s.replace(/,/g, '');
+  } else if (/^\D*\d{1,3}(?:\.\d{3})+(?:,\d+)?\D*$/.test(s)) {
+    s = s.replace(/\./g, '');
+  }
+  const numMatch = s.match(/(-?[0-9]+(?:[.,][0-9]+)?)/);
+  if (!numMatch) return NaN;
+  let val = parseFloat(numMatch[1].replace(',', '.'));
+  if (!Number.isFinite(val) || val < 0) return NaN;
+  if (val === 0) return 0;
+  const hasMlrd = /млрд|\bbn\b|(?:\d|\s)[bб](?=[\s.,€$₽]|$)/i.test(s);
+  const hasMln = /млн|\bmln\b|\bmio\b|(?:\d|\s)[mм](?=[\s.,€$₽]|$)/i.test(s);
+  const hasK = /тыс|(?:\d|\s)[kк](?=[\s.,€$₽]|$)/i.test(s);
+  if (hasMlrd) val *= 1000;
+  else if (hasK && !hasMln) val /= 1000;
+  else if (!hasMln && val >= 1000) val /= 1_000_000;
+  if (/₽|руб/i.test(s)) val /= 100;
+  return Math.max(0, Math.round(val * 1_000_000) / 1_000_000);
+}
+
+function formatFeeMillions(mln) {
+  const num = Number(mln);
+  if (!Number.isFinite(num) || num <= 0) return '€0';
+  if (num < 1) {
+    const k = Math.round(num * 1000);
+    if (k > 0 && Math.abs(num * 1000 - k) < 0.01 && num < 0.1) return `€${k}K`;
+    const r = parseFloat(num.toFixed(3));
+    return `€${Number.isInteger(r * 10) ? r.toFixed(1) : r}M`;
+  }
+  const r = parseFloat(num.toFixed(3));
+  return `€${Number.isInteger(r) ? r.toFixed(1) : r}M`;
+}
+
+function formatFeePreviewText(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return { text: 'Введите число: 1 = €1 000 000 (1 млн €)', cls: 'fee-hint err' };
+  const mln = parseFeeToMillions(s);
+  if (!Number.isFinite(mln)) return { text: 'Непонятный формат. Пример: 1 (= 1 млн €) или 0.5 (= 500 тыс. €)', cls: 'fee-hint err' };
+  if (mln === 0) return { text: '= €0 (без доплаты / бесплатно)', cls: 'fee-hint zero' };
+  const eur = Math.round(mln * 1_000_000);
+  const shortLabel = mln >= 1
+    ? `${Number.isInteger(mln) ? mln : parseFloat(mln.toFixed(3))} млн €`
+    : `${Math.round(mln * 1000)} тыс. €`;
+  return { text: `= €${eur.toLocaleString('ru-RU')} (${shortLabel})`, cls: 'fee-hint' };
+}
+
+function feeQuickChipsHtml(targetId, chips = [['0', '€0'], ['0.5', '500K'], ['1', '1M'], ['3', '3M'], ['5', '5M'], ['10', '10M']]) {
+  return `<div class="fee-chips" data-fee-chips="${e(targetId)}">${chips.map(([val, label]) => `<button type="button" class="fee-chip" data-fee-val="${e(val)}">${e(label)}</button>`).join('')}</div>`;
+}
+
+function bindFeeWidget(root, inputSel, hintSel) {
+  const scope = root || document;
+  const inp = scope.querySelector(inputSel);
+  const hint = scope.querySelector(hintSel);
+  if (!inp) return;
+  const update = () => {
+    if (!hint) return;
+    const p = formatFeePreviewText(inp.value);
+    hint.textContent = p.text;
+    hint.className = p.cls;
+  };
+  inp.addEventListener('input', update);
+  const chipsWrap = inp.id ? scope.querySelector(`[data-fee-chips="${inp.id}"]`) : null;
+  if (chipsWrap) {
+    chipsWrap.querySelectorAll('[data-fee-val]').forEach(btn => {
+      btn.onclick = () => {
+        inp.value = btn.dataset.feeVal;
+        update();
+      };
+    });
+  }
+  update();
+}
+
 function renderAiAdviceBlock(adv) {
   if (!adv) return '';
   const isPos = String(adv.verdict || '').toLowerCase().includes('одобр') || (adv.ratingScore && adv.ratingScore >= 7);
@@ -2103,9 +2196,33 @@ async function pgHome(app) {
   ]);
   const fx = Array.isArray(rawFx) ? rawFx : [];
   const tb = Array.isArray(rawTb) ? rawTb : [];
+  const fxRealTs = f => {
+    if (Number.isFinite(f?.realStartAt)) return f.realStartAt;
+    const rd = String(f?.realDate || f?.date || '').trim();
+    const rt = String(f?.realTime || f?.time || '12:00').trim();
+    const m = rt.match(/^(\d{1,2}):(\d{2})/);
+    const hhmm = m ? `${m[1].padStart(2, '0')}:${m[2]}` : '12:00';
+    const ts = Date.parse(`${rd}T${hhmm}:00+03:00`);
+    return Number.isFinite(ts) ? ts : 0;
+  };
+  const nowMs = Date.now();
+  const upcomingGraceMs = 15 * 60 * 1000;
   const live = fx.filter(f => f.status === 'live');
-  const next = fx.filter(f => f.status === 'scheduled').slice(0, 3);
-  const last = fx.filter(f => f.status === 'done').slice(-3).reverse();
+  const next = fx
+    .filter(f => f.status === 'scheduled' || f.status === 'queued' || f.status === 'generating')
+    .sort((a, b) => {
+      const ta = fxRealTs(a), tb = fxRealTs(b);
+      const aFuture = ta >= nowMs - upcomingGraceMs;
+      const bFuture = tb >= nowMs - upcomingGraceMs;
+      if (aFuture !== bFuture) return aFuture ? -1 : 1;
+      if (aFuture) return ta - tb || String((a.date || '') + (a.time || '')).localeCompare(String((b.date || '') + (b.time || '')));
+      return tb - ta || String((a.date || '') + (a.time || '')).localeCompare(String((b.date || '') + (b.time || '')));
+    })
+    .slice(0, 3);
+  const last = fx
+    .filter(f => f.status === 'done')
+    .sort((a, b) => fxRealTs(b) - fxRealTs(a) || String((b.date || '') + (b.time || '')).localeCompare(String((a.date || '') + (a.time || ''))))
+    .slice(0, 3);
 
   let trTab = 'expensive';
 
@@ -4279,8 +4396,10 @@ function renderEuropeanTransferPanelHtml() {
             <input id="tr_club" placeholder="Напр. Спортинг" autocomplete="off">
           </div>
           <div class="eur-tr-field eur-tr-span-fee">
-            <label for="tr_fee">Сумма сделки</label>
-            <input id="tr_fee" placeholder="Напр. €65M" value="€15.0M">
+            <label for="tr_fee">Сумма сделки (млн €)</label>
+            <input id="tr_fee" inputmode="decimal" placeholder="Напр. 1 (= 1 млн €)" value="1">
+            <div id="tr_fee_hint" class="fee-hint"></div>
+            ${feeQuickChipsHtml('tr_fee')}
           </div>
 
           <div class="eur-tr-field eur-tr-span-sellon">
@@ -4320,8 +4439,9 @@ function renderEuropeanTransferPanelHtml() {
               </datalist>
             </div>
             <div class="eur-tr-field eur-tr-cond-fee">
-              <label for="tr_buyout_fee" style="color:#78350f">Сумма выкупа</label>
-              <input id="tr_buyout_fee" placeholder="€15.0M" value="€15.0M">
+              <label for="tr_buyout_fee" style="color:#78350f">Сумма выкупа (млн €)</label>
+              <input id="tr_buyout_fee" inputmode="decimal" placeholder="Напр. 1 (= 1 млн €)" value="1">
+              <div id="tr_buyout_hint" class="fee-hint"></div>
             </div>
           </div>
           <div class="eur-tr-presets">
@@ -4337,9 +4457,9 @@ function renderEuropeanTransferPanelHtml() {
       <!-- Ввод списка игроков -->
       <div id="tr_batch_wrap" style="display:none;margin-top:10px">
         <p class="muted small" style="margin:0 0 8px">
-          Введите список игроков (каждый с новой строки). Формат: <code>ФИО, Позиция, Возраст, Страна, Клуб, Сумма, Тип сделки, Sell-on</code>. Можно указать условие выкупа (например: <code>условие: выход в еврокубки</code>).
+          Введите список игроков (каждый с новой строки). Формат: <code>ФИО, Позиция, Возраст, Страна, Клуб, Сумма, Тип сделки, Sell-on</code>. Сумму можно писать в млн (<code>1M</code> или <code>€1.5M</code>) или в евро (<code>1 000 000</code>). Можно указать условие выкупа (например: <code>условие: выход в еврокубки</code>).
         </p>
-        <textarea id="tr_batch_text" class="eur-tr-batch-text" rows="4" placeholder="Виктор Дьёкереш, ЦФ, 26, Швеция, Спортинг, €65M, покупка, 25% sell-on&#10;Арда Гюлер, АП, 21, Турция, Реал Мадрид, €18M, аренда с обязательным выкупом (условие: выход в топ-4), 30% sell-on&#10;Эндрик, ЦФ, 20, Бразилия, Реал Мадрид, €20M, аренда с выкупом, 15% sell-on"></textarea>
+        <textarea id="tr_batch_text" class="eur-tr-batch-text" rows="4" placeholder="Виктор Дьёкереш, ЦФ, 26, Швеция, Спортинг, 5M, покупка, 25% sell-on&#10;Арда Гюлер, АП, 21, Турция, Реал Мадрид, 2M, аренда с обязательным выкупом (условие: выход в топ-4), 30% sell-on&#10;Эндрик, ЦФ, 20, Бразилия, Реал Мадрид, 1.5M, аренда с выкупом, 15% sell-on"></textarea>
         <div class="row sp" style="margin-top:10px;align-items:center;flex-wrap:wrap;gap:8px">
           <span class="muted small">💡 Позиция: ВР, ЦЗ, ЛЗ, ПЗ, ОП, ЦП, АП, ЛВ, ПВ, ЦФ · Sell-on от 0% до 90%</span>
           <button class="btn" id="tr_batch_send" style="background:#1d4ed8;color:#fff">Отправить весь список админу 🚀</button>
@@ -4492,6 +4612,9 @@ function setupEuropeanTransferHandlers(app, refreshFn) {
     renderClubTrq();
   }).catch(() => {});
 
+  bindFeeWidget(app, '#tr_fee', '#tr_fee_hint');
+  bindFeeWidget(app, '#tr_buyout_fee', '#tr_buyout_hint');
+
   const btnSend = $('#tr_send');
   if (btnSend) {
     btnSend.onclick = async () => {
@@ -4501,10 +4624,22 @@ function setupEuropeanTransferHandlers(app, refreshFn) {
       const pAge = pAgeRaw ? Number(pAgeRaw) : 0;
       const pCountry = $('#tr_country')?.value?.trim();
       const pClub = $('#tr_club')?.value?.trim();
-      const feeVal = $('#tr_fee')?.value?.trim() || '€10.0M';
+      const feeRaw = $('#tr_fee')?.value?.trim() || '';
+      const feeMln = parseFeeToMillions(feeRaw);
+      if (!feeRaw || !Number.isFinite(feeMln)) return toast('Укажите сумму сделки (например: 1 = €1 000 000, или 0)');
+      const feeVal = formatFeeMillions(feeMln);
       const trType = $('#tr_type')?.value || 'transfer';
       const isMand = $('#tr_mandatory_rpl')?.checked || trType === 'loan_mandatory_rpl';
-      const buyoutFeeVal = isMand ? ($('#tr_buyout_fee')?.value?.trim() || feeVal) : undefined;
+      let buyoutFeeVal;
+      if (isMand) {
+        const bRaw = $('#tr_buyout_fee')?.value?.trim() || '';
+        if (!bRaw) buyoutFeeVal = feeVal;
+        else {
+          const bMln = parseFeeToMillions(bRaw);
+          if (!Number.isFinite(bMln)) return toast('Укажите корректную сумму выкупа (например: 1 = €1 000 000)');
+          buyoutFeeVal = formatFeeMillions(bMln);
+        }
+      }
       const loanCondVal = isMand ? ($('#tr_condition')?.value?.trim() || 'Сохранение прописки в РПЛ') : undefined;
       let sellOnVal = Number($('#tr_sell_on')?.value || 0);
       if (sellOnVal > 90) {
@@ -5702,20 +5837,27 @@ async function pgClub(app) {
       modal(`<div style="max-width:470px;padding:4px">
         <h3 style="margin:0 0 4px">Заявка на специалиста</h3>
         <div style="margin-bottom:8px"><b>${e(m.name)}</b> <span class="muted small">· ${e(m.roleTitle)} · ${e(m.teamName)}</span></div>
-        <label class="small muted">Компенсация клубу-продавцу</label>
-        <input id="of_fee" value="€1.0M" style="width:100%" placeholder="Напр. €1.5M">
-        <label class="small muted" style="margin-top:6px">Должность в вашем клубе</label>
+        <label class="small muted">Компенсация клубу-продавцу (млн €)</label>
+        <input id="of_fee" value="1" inputmode="decimal" style="width:100%" placeholder="Напр. 1 (= 1 млн €)">
+        <div id="of_fee_hint" class="fee-hint"></div>
+        ${feeQuickChipsHtml('of_fee', [['0', '€0'], ['0.3', '300K'], ['0.5', '500K'], ['1', '1M'], ['2', '2M'], ['5', '5M']])}
+        <label class="small muted" style="margin-top:8px">Должность в вашем клубе</label>
         <select id="of_role" style="width:100%">${opts.map(([v, t]) => `<option value="${e(v)}" ${v === def ? 'selected' : ''}>${e(t)}</option>`).join('')}</select>
         <div id="of_warn" class="small" style="margin-top:6px"></div>
         <label class="small muted" style="margin-top:6px">Комментарий (необязательно)</label>
         <input id="of_note" maxlength="300" style="width:100%">
         <div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="of_go">Отправить заявку</button><button class="btn sm warn" id="of_x">Отмена</button></div>
       </div>`, mm => {
+        bindFeeWidget(mm, '#of_fee', '#of_fee_hint');
         const warn = () => { const h = holderOf(mm.querySelector('#of_role').value); mm.querySelector('#of_warn').innerHTML = h ? `<span style="color:#991b1b">⚠ Сейчас на этой должности работает ${e(h)} — при переходе он покинет клуб.</span>` : ''; };
         mm.querySelector('#of_role').onchange = warn; warn();
         mm.querySelector('#of_x').onclick = () => mm.remove();
         mm.querySelector('#of_go').onclick = async () => {
-          const r = await act(() => api('/club/staff/offer', withT({ staffId: m.id, fee: mm.querySelector('#of_fee').value.trim(), targetRole: mm.querySelector('#of_role').value, note: mm.querySelector('#of_note').value.trim() })), x => x.message || 'Заявка отправлена');
+          const feeRaw = mm.querySelector('#of_fee').value.trim();
+          const feeMln = parseFeeToMillions(feeRaw);
+          if (!feeRaw || !Number.isFinite(feeMln)) return toast('Укажите сумму компенсации (например: 1 = €1 000 000, или 0)');
+          const fee = formatFeeMillions(feeMln);
+          const r = await act(() => api('/club/staff/offer', withT({ staffId: m.id, fee, targetRole: mm.querySelector('#of_role').value, note: mm.querySelector('#of_note').value.trim() })), x => x.message || 'Заявка отправлена');
           if (r) { mm.remove(); pgClub(app); }
         };
       });
@@ -6099,15 +6241,17 @@ async function pgClub(app) {
       <div class="panel">
         <h3>Сделать предложение по игроку РПЛ</h3>
         <p class="muted small">Найдите футболиста в чемпионате России и направьте предложение клубу-владельцу и администратору лиги с указанием предложенной суммы или условий обмена.</p>
-        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-start">
           <div class="sug" style="flex:2;min-width:220px">
             <label class="small muted">Поиск игрока в РПЛ</label>
             <input id="cl_tr_psearch" placeholder="Начните вводить фамилию игрока..." autocomplete="off">
             <div class="list" id="cl_tr_plist" hidden></div>
           </div>
-          <div style="flex:1;min-width:140px">
-            <label class="small muted">Сумма / Доплата</label>
-            <input id="cl_tr_fee" placeholder="Сумма (напр. €6.5M)" value="€5.0M" style="width:100%">
+          <div style="flex:1.4;min-width:200px">
+            <label class="small muted">Сумма / Доплата (млн €)</label>
+            <input id="cl_tr_fee" inputmode="decimal" placeholder="Напр. 1 (= 1 млн €) или 0" value="1" style="width:100%">
+            <div id="cl_tr_fee_hint" class="fee-hint"></div>
+            ${feeQuickChipsHtml('cl_tr_fee')}
           </div>
           <div style="width:auto;min-width:180px">
             <label class="small muted">Тип сделки</label>
@@ -6131,19 +6275,22 @@ async function pgClub(app) {
               </div>
             </div>
           </div>
-          <div style="align-self:flex-end">
+          <div style="padding-top:19px">
             <button class="btn" id="cl_tr_submit">Направить предложение</button>
           </div>
         </div>
 
         <div id="cl_tr_complex_wrap" style="display:none;margin-top:10px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
-          <div class="row sp" style="flex-wrap:wrap;gap:8px;align-items:center">
-            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:#92400e;margin:0">
+          <div class="row sp" style="flex-wrap:wrap;gap:8px;align-items:flex-start">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:#92400e;margin:0;padding-top:4px">
               <input type="checkbox" id="cl_tr_mandatory_rpl" style="width:auto"> 🛡️ Аренда с обязательным правом выкупа
             </label>
-            <div id="cl_tr_buyout_wrap" style="display:flex;align-items:center;gap:6px">
-              <span class="small muted" style="font-weight:600">Сумма выкупа:</span>
-              <input id="cl_tr_buyout_fee" placeholder="€8.0M" value="€8.0M" style="width:110px;padding:4px 8px;font-size:13px">
+            <div id="cl_tr_buyout_wrap" style="display:flex;flex-direction:column;gap:2px;min-width:170px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="small muted" style="font-weight:600">Выкуп (млн €):</span>
+                <input id="cl_tr_buyout_fee" inputmode="decimal" placeholder="Напр. 1" value="1" style="width:110px;padding:4px 8px;font-size:13px">
+              </div>
+              <div id="cl_tr_buyout_hint" class="fee-hint"></div>
             </div>
           </div>
           <div style="margin-top:8px">
@@ -6178,7 +6325,7 @@ async function pgClub(app) {
             ${rosterSwapList.map(p => `<option value="${p.id}">${e(p.name)} (${p.pos}, ${age(p.born)} л.)</option>`).join('')}
           </select>
           <div class="muted small" style="margin-top:6px">
-            В поле «Сумма / Доплата» укажите доплату со стороны вашего клуба (или введите <b>€0</b>, если чистый обмен без доплат).
+            В поле «Сумма / Доплата (млн €)» укажите доплату со стороны вашего клуба (например <b>1</b> = €1 000 000) или введите <b>0</b>, если чистый обмен без доплат.
           </div>
         </div>
 
@@ -6210,21 +6357,24 @@ async function pgClub(app) {
     const complexWrap = $('#cl_tr_complex_wrap');
     const chkMandatory = $('#cl_tr_mandatory_rpl');
 
+    bindFeeWidget(cb, '#cl_tr_fee', '#cl_tr_fee_hint');
+    bindFeeWidget(cb, '#cl_tr_buyout_fee', '#cl_tr_buyout_hint');
+
     if (typeSelect) {
       typeSelect.onchange = () => {
         if (typeSelect.value === 'exchange') {
           if (swapWrap) swapWrap.style.display = 'block';
           if (complexWrap) complexWrap.style.display = 'none';
-          if ($('#cl_tr_fee')) $('#cl_tr_fee').placeholder = 'Доплата (напр. €2.0M или €0)';
+          if ($('#cl_tr_fee')) $('#cl_tr_fee').placeholder = 'Доплата в млн € (напр. 2 или 0)';
         } else if (typeSelect.value === 'loan_mandatory_rpl') {
           if (swapWrap) swapWrap.style.display = 'none';
           if (complexWrap) complexWrap.style.display = 'block';
           if (chkMandatory) chkMandatory.checked = true;
-          if ($('#cl_tr_fee')) $('#cl_tr_fee').placeholder = 'Плата за аренду (напр. €1.5M или €0)';
+          if ($('#cl_tr_fee')) $('#cl_tr_fee').placeholder = 'Плата за аренду в млн € (напр. 1 или 0)';
         } else {
           if (swapWrap) swapWrap.style.display = 'none';
           if (complexWrap) complexWrap.style.display = chkMandatory?.checked ? 'block' : 'none';
-          if ($('#cl_tr_fee')) $('#cl_tr_fee').placeholder = 'Сумма (напр. €6.5M)';
+          if ($('#cl_tr_fee')) $('#cl_tr_fee').placeholder = 'Напр. 1 (= 1 млн €) или 0';
         }
       };
     }
@@ -6269,11 +6419,20 @@ async function pgClub(app) {
     if (btnSubmitOffer) {
       btnSubmitOffer.onclick = async () => {
         if (!trSelectedPid) return toast('Сначала выберите игрока из списка подсказок');
-        const feeVal = $('#cl_tr_fee')?.value || '€5.0M';
+        const feeRaw = $('#cl_tr_fee')?.value?.trim() || '';
+        const feeMln = parseFeeToMillions(feeRaw);
+        if (!feeRaw || !Number.isFinite(feeMln)) return toast('Укажите сумму сделки (например: 1 = €1 000 000, или 0)');
+        const feeVal = formatFeeMillions(feeMln);
         const typeVal = $('#cl_tr_type')?.value || 'transfer';
         const swapPid = typeVal === 'exchange' ? $('#cl_tr_swap_pid')?.value : undefined;
         const mandatoryBuyout = !!($('#cl_tr_mandatory_rpl')?.checked || typeVal === 'loan_mandatory_rpl');
-        const buyoutFee = $('#cl_tr_buyout_fee')?.value || '€8.0M';
+        let buyoutFee = feeVal;
+        if (mandatoryBuyout) {
+          const bRaw = $('#cl_tr_buyout_fee')?.value?.trim() || '';
+          const bMln = bRaw ? parseFeeToMillions(bRaw) : feeMln;
+          if (bRaw && !Number.isFinite(bMln)) return toast('Укажите корректную сумму выкупа (например: 1 = €1 000 000)');
+          buyoutFee = formatFeeMillions(bMln);
+        }
         const loanCondition = $('#cl_tr_condition')?.value || 'Сохранение прописки в РПЛ';
         let sellOnPercent = Number($('#cl_tr_sell_on')?.value || 0);
         if (sellOnPercent > 90) {
@@ -6492,6 +6651,7 @@ const ROLE_DEFS = [
   { key: 'cornerRight', label: '🚩 Угловой справа' },
   { key: 'cornerLeft', label: '🏳️ Угловой слева' }
 ];
+const CLIENT_POSES = ['ВР', 'ЦЗ', 'ЛЗ', 'ПЗ', 'ОП', 'ЦП', 'АП', 'ЛП', 'ПП', 'ЛВ', 'ПВ', 'ЦФ'];
 function clientNormPos(pos) {
   const p = String(pos || '').trim().toUpperCase();
   if (p === 'ЗАЩ') return 'ЦЗ';
@@ -6516,7 +6676,9 @@ function clientFormationSlots(formation) {
     const cm = midParts.length >= 3 ? midParts.slice(1, -1).reduce((a, b) => a + b, 0) : 0;
     if (dm === 1) slots.push('ОП');
     else if (dm === 2) slots.push('ОП', 'ОП');
-    else if (dm >= 3) { slots.push('ОП', 'ЦП', 'ОП'); for (let i = 3; i < dm; i++) slots.push('ОП'); }
+    else if (dm === 3) slots.push('ЦП', 'ОП', 'ЦП');
+    else if (dm === 4) slots.push('ЛП', 'ЦП', 'ЦП', 'ПП');
+    else if (dm >= 5) { slots.push('ЛП', 'ОП', 'ЦП', 'ОП', 'ПП'); for (let i = 5; i < dm; i++) slots.push('ЦП'); }
     for (let i = 0; i < cm; i++) slots.push('ЦП');
     if (am === 1) slots.push('АП');
     else if (am === 2) slots.push('АП', 'АП');
@@ -6560,17 +6722,7 @@ function clientPosFit(naturalPos, slotPos) {
   if (minors.some(Boolean)) return { cost: 2, severity: 'minor', badge: '~ Смежная', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' };
   return { cost: 9, severity: 'forced', badge: '⚠ Неродная (вынужденная)', color: '#b45309', bg: '#fffbeb', border: '#fcd34d' };
 }
-function clientAssignSlots(formation, starterIds, savedSlots, poolById) {
-  const slotList = clientFormationSlots(formation);
-  const stSet = new Set(starterIds);
-  if (Array.isArray(savedSlots) && savedSlots.length === 11) {
-    const used = new Set();
-    const ok = savedSlots.every((it, idx) => it && it.pid && stSet.has(it.pid) && !used.has(it.pid) && (used.add(it.pid), true));
-    if (ok && used.size === 11) {
-      const sameSlots = savedSlots.every((it, idx) => it.slot === slotList[idx]);
-      if (sameSlots) return savedSlots.map((it, idx) => ({ idx, slotPos: slotList[idx], pid: it.pid }));
-    }
-  }
+function clientMatchStartersToSlots(slotList, starterIds, poolById) {
   const n = Math.min(slotList.length, starterIds.length);
   const chosen = starterIds.slice(0, n);
   if (n < 11) return slotList.map((slotPos, idx) => ({ idx, slotPos, pid: chosen[idx] || '' }));
@@ -6596,6 +6748,22 @@ function clientAssignSlots(formation, starterIds, savedSlots, poolById) {
     }
   }
   return slotList.map((slotPos, idx) => ({ idx, slotPos, pid: assigned[idx] }));
+}
+function clientAssignSlots(formation, starterIds, savedSlots, poolById) {
+  const slotList = clientFormationSlots(formation);
+  const stSet = new Set(starterIds);
+  if (Array.isArray(savedSlots) && savedSlots.length === 11) {
+    const used = new Set();
+    const ok = savedSlots.every(it => it && it.pid && stSet.has(it.pid) && !used.has(it.pid) && (used.add(it.pid), true));
+    if (ok && used.size === 11) {
+      return savedSlots.map((it, idx) => {
+        const normSlot = clientNormPos(it.slot || slotList[idx]);
+        const slotPos = CLIENT_POSES.includes(normSlot) ? normSlot : slotList[idx];
+        return { idx, slotPos, pid: it.pid };
+      });
+    }
+  }
+  return clientMatchStartersToSlots(slotList, starterIds, poolById);
 }
 
 function renderFatigueBadge(fat, available, unavailReason, opts = {}) {
@@ -6733,8 +6901,15 @@ function lineupForm(box, f, c, withT, app) {
   </div>
   <div class="row" style="margin-top:14px"><button class="btn save">Сохранить</button><span class="muted small">Состав можно менять до начала матча.</span></div>`;
 
-  let currentSlots = Array.isArray(L.slots) ? L.slots : [];
+  let currentSlots = Array.isArray(L.slots) ? L.slots.map(x => ({ slot: x.slot, pid: x.pid })) : [];
   let currentRoles = { ...initRoles };
+  let lastValidFm = String(L.formation || '4-3-3').trim();
+  const isCompleteFormation = fmStr => {
+    const s = String(fmStr || '').trim();
+    if (!/^\d+(?:-\d+){1,3}$/.test(s)) return false;
+    const sum = s.split('-').reduce((a, b) => a + Number(b), 0);
+    return sum === 10;
+  };
 
   const getSelected = () => {
     const sel = [...box.querySelectorAll('select[data-p]')];
@@ -6753,8 +6928,17 @@ function lineupForm(box, f, c, withT, app) {
       wrap.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:4px">📍 Позиции в схеме (${e(fm)})</div><div class="muted small">Выберите 11 игроков в стартовый состав, чтобы настроить их позиции в схеме.</div>`;
       return;
     }
+    if (currentSlots.length === 11) {
+      const sSet = new Set(sPids);
+      const oldSet = new Set(currentSlots.map(x => x.pid));
+      const added = sPids.filter(id => !oldSet.has(id));
+      const patched = currentSlots.map(x => (sSet.has(x.pid) ? x : { ...x, pid: added.shift() || '' }));
+      if (patched.every(x => x.pid)) currentSlots = patched;
+    }
+    const defaultSlots = clientFormationSlots(fm);
     const assigned = clientAssignSlots(fm, sPids, currentSlots, poolById);
     currentSlots = assigned.map(a => ({ slot: a.slotPos, pid: a.pid }));
+    const hasCustomSlots = currentSlots.some((s, idx) => s.slot !== defaultSlots[idx]);
     const forcedList = [];
     const rowsHtml = assigned.map(item => {
       const chosenP = poolById[item.pid];
@@ -6765,12 +6949,13 @@ function lineupForm(box, f, c, withT, app) {
       const pFat = isAdmin ? (fFatMap[item.pid] || chosenP?.fatigue) : null;
       const pAvail = fAvailMap[item.pid] ? fAvailMap[item.pid].available : (chosenP?.available ?? true);
       const compactFat = isAdmin ? renderFatigueBadge(pFat, pAvail, '', { compact: true }) : '';
+      const slotPosOpts = CLIENT_POSES.map(pos => `<option value="${pos}" ${pos === item.slotPos ? 'selected' : ''}>${pos}</option>`).join('');
       const opts = sPids.map(pid => {
         const sp = poolById[pid];
         return `<option value="${e(pid)}" ${pid === item.pid ? 'selected' : ''}>${e(sp?.pos || '?')} · ${e(sp?.name || pid)}</option>`;
       }).join('');
       return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap">
-        <span class="tag" style="min-width:36px;text-align:center;font-weight:700">${e(item.slotPos)}</span>
+        <select class="slot-pos-pick" data-slot-idx="${item.idx}" title="Выбрать позицию слота в схеме" style="width:74px;min-width:68px;font-weight:700;text-align:center;padding:4px 6px">${slotPosOpts}</select>
         <select class="slot-pick" data-slot-idx="${item.idx}" data-slot-pos="${e(item.slotPos)}" style="flex:1;min-width:140px">${opts}</select>
         ${compactFat}
         <span class="tag" style="font-size:11px;background:${fit.bg};color:${fit.color};border-color:${fit.border};white-space:nowrap">${e(fit.badge)}</span>
@@ -6778,16 +6963,35 @@ function lineupForm(box, f, c, withT, app) {
     }).join('');
     wrap.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        <div style="font-weight:700;font-size:13px">📍 Расстановка по позициям в схеме (${e(fm)})</div>
-        <button type="button" class="btn sm alt" id="auto_slots_btn" style="font-size:11.5px;padding:3px 9px">Автоподбор позиций</button>
+        <div style="font-weight:700;font-size:13px">📍 Расстановка и выбор позиций в схеме (${e(fm)})</div>
+        <div class="row" style="gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn sm alt" id="auto_slots_btn" style="font-size:11.5px;padding:3px 9px">Автоподбор игроков</button>
+          ${hasCustomSlots ? `<button type="button" class="btn sm alt" id="reset_slots_btn" style="font-size:11.5px;padding:3px 9px" title="Вернуть стандартные позиции схемы ${e(fm)}">Сбросить позиции схемы</button>` : ''}
+        </div>
       </div>
+      <div class="muted small" style="margin-bottom:6px">Вы можете сами изменить любую позицию слева (например, выбрать ЛП, ЦП, ПП вместо ОП) и назначить нужного игрока справа.</div>
       <div>${rowsHtml}</div>
       ${forcedList.length ? `<div style="margin-top:8px;padding:7px 10px;border-radius:6px;background:#fffbeb;border:1px solid #fcd34d;color:#b45309;font-size:12px"><b>⚠ Вынужденная перестановка:</b> ${e(forcedList.join('; '))} — это учитывается движком матча (возможны ошибки в приёме и выборе позиции).</div>` : ''}
     `;
     wrap.querySelector('#auto_slots_btn')?.addEventListener('click', () => {
+      const targetSlots = currentSlots.length === 11 ? currentSlots.map(x => x.slot) : clientFormationSlots(fm);
+      const rematched = clientMatchStartersToSlots(targetSlots, sPids, poolById);
+      currentSlots = rematched.map(a => ({ slot: a.slotPos, pid: a.pid }));
+      renderSlotsEditor();
+      schedulePreview();
+    });
+    wrap.querySelector('#reset_slots_btn')?.addEventListener('click', () => {
       currentSlots = [];
       renderSlotsEditor();
       schedulePreview();
+    });
+    wrap.querySelectorAll('.slot-pos-pick').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const idx = Number(sel.dataset.slotIdx);
+        if (currentSlots[idx]) currentSlots[idx].slot = sel.value;
+        renderSlotsEditor();
+        schedulePreview();
+      });
     });
     wrap.querySelectorAll('.slot-pick').forEach(sel => {
       sel.addEventListener('change', () => {
@@ -6870,15 +7074,27 @@ function lineupForm(box, f, c, withT, app) {
   cnt();
   renderSlotsEditor();
   renderRolesEditor();
+  const handleFormationEdit = () => {
+    const fmVal = String(box.querySelector('.fm')?.value || '').trim();
+    if (isCompleteFormation(fmVal) && fmVal !== lastValidFm) {
+      lastValidFm = fmVal;
+      currentSlots = [];
+    }
+    renderSlotsEditor();
+  };
   box.addEventListener('change', ev => {
-    if (ev.target.matches('select[data-p], .fm')) {
+    if (ev.target.matches('select[data-p]')) {
       cnt();
       renderSlotsEditor();
+      renderRolesEditor();
+    } else if (ev.target.matches('.fm')) {
+      cnt();
+      handleFormationEdit();
       renderRolesEditor();
     }
   });
   box.querySelector('.fm')?.addEventListener('input', () => {
-    renderSlotsEditor();
+    handleFormationEdit();
   });
 
   const liveBox = box.querySelector('#tactical_preview_widget');
@@ -6961,7 +7177,7 @@ function lineupForm(box, f, c, withT, app) {
       if (sel.value) rolesPayload[sel.dataset.role] = sel.value;
     });
     const slotsPayload = [...box.querySelectorAll('.slot-pick')].map(sel => ({
-      slot: sel.dataset.slotPos,
+      slot: box.querySelector(`.slot-pos-pick[data-slot-idx="${sel.dataset.slotIdx}"]`)?.value || sel.dataset.slotPos,
       pid: sel.value
     }));
     const r = await act(() => api('/club/lineup', withT({
@@ -9074,9 +9290,11 @@ async function pgAdmin(app) {
               </div>
             </div>
           </div>
-          <div style="flex:1;min-width:130px">
-            <label class="small muted">Сумма сделки</label>
-            <input id="dt_fee" value="€5.0M" placeholder="€5.0M" style="width:100%">
+          <div style="flex:1.4;min-width:190px">
+            <label class="small muted">Сумма сделки (млн €)</label>
+            <input id="dt_fee" inputmode="decimal" value="1" placeholder="Напр. 1 (= 1 млн €)" style="width:100%">
+            <div id="dt_fee_hint" class="fee-hint"></div>
+            ${feeQuickChipsHtml('dt_fee')}
           </div>
           <div style="flex:1.4;min-width:180px;align-self:center;padding-top:14px">
             <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;margin:0">
@@ -9089,13 +9307,16 @@ async function pgAdmin(app) {
         </div>
 
         <div id="dt_complex_wrap" style="display:none;margin-top:10px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
-          <div class="row sp" style="flex-wrap:wrap;gap:8px;align-items:center">
-            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:#92400e;margin:0">
+          <div class="row sp" style="flex-wrap:wrap;gap:8px;align-items:flex-start">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:#92400e;margin:0;padding-top:4px">
               <input type="checkbox" id="dt_mandatory_rpl" style="width:auto"> 🛡️ Аренда с обязательным правом выкупа
             </label>
-            <div id="dt_buyout_wrap" style="display:flex;align-items:center;gap:6px">
-              <span class="small muted" style="font-weight:600">Сумма выкупа:</span>
-              <input id="dt_buyout_fee" placeholder="€8.0M" value="€8.0M" style="width:110px;padding:4px 8px;font-size:13px">
+            <div id="dt_buyout_wrap" style="display:flex;flex-direction:column;gap:2px;min-width:170px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="small muted" style="font-weight:600">Выкуп (млн €):</span>
+                <input id="dt_buyout_fee" inputmode="decimal" placeholder="Напр. 1" value="1" style="width:110px;padding:4px 8px;font-size:13px">
+              </div>
+              <div id="dt_buyout_hint" class="fee-hint"></div>
             </div>
           </div>
           <div style="margin-top:8px">
@@ -9499,6 +9720,9 @@ async function pgAdmin(app) {
       await act(() => api('/admin/transfer-requests/resolve', { requestId: b.dataset.trqNo, action: 'reject' }), 'Заявка отклонена');
       re();
     });
+    bindFeeWidget(ab, '#dt_fee', '#dt_fee_hint');
+    bindFeeWidget(ab, '#dt_buyout_fee', '#dt_buyout_hint');
+
     const dtType = $('#dt_type');
     const dtComplexWrap = $('#dt_complex_wrap');
     const dtChkMandatory = $('#dt_mandatory_rpl');
@@ -9507,7 +9731,6 @@ async function pgAdmin(app) {
         if (dtType.value === 'loan_mandatory_rpl') {
           if (dtComplexWrap) dtComplexWrap.style.display = 'block';
           if (dtChkMandatory) dtChkMandatory.checked = true;
-          if ($('#dt_fee') && $('#dt_fee').value === '€5.0M') $('#dt_fee').value = '€1.5M';
         } else {
           if (dtComplexWrap) dtComplexWrap.style.display = dtChkMandatory?.checked ? 'block' : 'none';
         }
@@ -9616,10 +9839,19 @@ async function pgAdmin(app) {
 
     $('#dt_go').onclick = async () => {
       const transferType = $('#dt_type').value;
-      const fee = $('#dt_fee').value;
+      const feeRaw = $('#dt_fee')?.value?.trim() || '';
+      const feeMln = parseFeeToMillions(feeRaw);
+      if (!feeRaw || !Number.isFinite(feeMln)) return toast('Укажите сумму сделки (например: 1 = €1 000 000, или 0)');
+      const fee = formatFeeMillions(feeMln);
       const force = $('#dt_force').checked;
       const mandatoryBuyout = !!($('#dt_mandatory_rpl')?.checked || transferType === 'loan_mandatory_rpl');
-      const buyoutFee = $('#dt_buyout_fee')?.value || '€8.0M';
+      let buyoutFee = fee;
+      if (mandatoryBuyout) {
+        const bRaw = $('#dt_buyout_fee')?.value?.trim() || '';
+        const bMln = bRaw ? parseFeeToMillions(bRaw) : feeMln;
+        if (bRaw && !Number.isFinite(bMln)) return toast('Укажите корректную сумму выкупа (например: 1 = €1 000 000)');
+        buyoutFee = formatFeeMillions(bMln);
+      }
       const loanCondition = $('#dt_condition')?.value || 'Сохранение прописки в РПЛ';
       let sellOnPercent = Number($('#dt_sell_on')?.value || 0);
       if (sellOnPercent > 90) {
@@ -9908,25 +10140,32 @@ async function pgAdmin(app) {
                 <option value="set">🟰 Установить точный баланс</option>
               </select>
             </div>
-            <div style="flex:1.5;min-width:160px">
-              <label class="small muted">Сумма в €</label>
-              <input type="number" id="adj_amt" value="1000000" step="100000" style="width:100%">
+            <div style="flex:1.8;min-width:210px">
+              <label class="small muted">Сумма</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="number" id="adj_amt" value="1" step="0.1" min="0" style="flex:1;min-width:90px">
+                <select id="adj_unit" style="width:110px">
+                  <option value="mln" selected>млн €</option>
+                  <option value="eur">€ (евро)</option>
+                </select>
+              </div>
+              <div id="adj_amt_hint" class="fee-hint">Итого: €1 000 000</div>
             </div>
-            <div style="flex:2.5;min-width:220px">
+            <div style="flex:2.2;min-width:210px">
               <label class="small muted">Обоснование / примечание</label>
               <input id="adj_reason" placeholder="Например: Спонсорский контракт, инвестиции" style="width:100%">
             </div>
-            <div style="padding-top:14px">
+            <div style="padding-top:19px">
               <button class="btn" id="adj_submit">Применить</button>
             </div>
           </div>
-          <div class="row" style="gap:6px;margin-top:8px">
+          <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
             <span class="small muted">Быстрый выбор:</span>
-            <button class="btn sm alt quick-amt" data-val="500000">+€500K</button>
-            <button class="btn sm alt quick-amt" data-val="1000000">+€1.0M</button>
-            <button class="btn sm alt quick-amt" data-val="3000000">+€3.0M</button>
-            <button class="btn sm alt quick-amt" data-val="5000000">+€5.0M</button>
-            <button class="btn sm alt quick-amt" data-val="10000000">+€10.0M</button>
+            <button type="button" class="btn sm alt quick-amt" data-mln="0.5">+500K</button>
+            <button type="button" class="btn sm alt quick-amt" data-mln="1">+1 млн</button>
+            <button type="button" class="btn sm alt quick-amt" data-mln="3">+3 млн</button>
+            <button type="button" class="btn sm alt quick-amt" data-mln="5">+5 млн</button>
+            <button type="button" class="btn sm alt quick-amt" data-mln="10">+10 млн</button>
           </div>
         </div>
 
@@ -10117,10 +10356,45 @@ async function pgAdmin(app) {
         };
       }
 
+      const updateAdjPreview = () => {
+        const amtInp = document.getElementById('adj_amt');
+        const unitSel = document.getElementById('adj_unit');
+        const hintEl = document.getElementById('adj_amt_hint');
+        if (!amtInp || !hintEl) return;
+        const val = Number(String(amtInp.value || '').replace(/\s+/g, '').replace(',', '.'));
+        const isMln = (unitSel?.value || 'mln') === 'mln';
+        if (!Number.isFinite(val) || val < 0) {
+          hintEl.textContent = 'Введите корректную сумму';
+          hintEl.className = 'fee-hint err';
+          return;
+        }
+        const eur = Math.round(isMln ? val * 1_000_000 : val);
+        hintEl.textContent = `Итого: €${eur.toLocaleString('ru-RU')}${eur > 0 ? ` (${(eur / 1_000_000).toFixed(2).replace(/\.?0+$/, '')} млн €)` : ''}`;
+        hintEl.className = eur === 0 ? 'fee-hint zero' : 'fee-hint';
+      };
+
+      const adjAmtInp = document.getElementById('adj_amt');
+      const adjUnitSel = document.getElementById('adj_unit');
+      if (adjAmtInp) adjAmtInp.oninput = updateAdjPreview;
+      if (adjUnitSel) {
+        adjUnitSel.onchange = () => {
+          const cur = Number(String(adjAmtInp?.value || '').replace(',', '.'));
+          if (adjAmtInp && Number.isFinite(cur)) {
+            if (adjUnitSel.value === 'eur' && cur < 1000) adjAmtInp.value = Math.round(cur * 1_000_000);
+            else if (adjUnitSel.value === 'mln' && cur >= 1000) adjAmtInp.value = parseFloat((cur / 1_000_000).toFixed(6));
+            adjAmtInp.step = adjUnitSel.value === 'mln' ? '0.1' : '100000';
+          }
+          updateAdjPreview();
+        };
+      }
+      updateAdjPreview();
+
       ab.querySelectorAll('.quick-amt').forEach(b => {
         b.onclick = () => {
-          const amtInp = document.getElementById('adj_amt');
-          if (amtInp) amtInp.value = b.dataset.val;
+          const mln = Number(b.dataset.mln);
+          if (!adjAmtInp) return;
+          adjAmtInp.value = (adjUnitSel?.value || 'mln') === 'mln' ? mln : Math.round(mln * 1_000_000);
+          updateAdjPreview();
         };
       });
 
@@ -10128,8 +10402,9 @@ async function pgAdmin(app) {
         const teamId = $('#adj_tid').value;
         const mode = $('#adj_mode').value;
         const amount = $('#adj_amt').value;
+        const unit = $('#adj_unit')?.value || 'mln';
         const reason = $('#adj_reason').value;
-        const r = await act(() => api('/admin/budget/adjust', { teamId, mode, amount, reason }), 'Бюджет обновлен');
+        const r = await act(() => api('/admin/budget/adjust', { teamId, mode, amount, unit, reason }), 'Бюджет обновлен');
         if (r) re();
       });
 
@@ -10147,33 +10422,71 @@ async function pgAdmin(app) {
             <label>Операция</label>
             <select id="m_adj_mode">
               <option value="add">➕ Добавить к бюджету (+)</option>
-              <option value="subtract">➖ Списать со счёта (-)</option>
+              <option value="subtract">➖ Списать с бюджета (-)</option>
               <option value="set">🟰 Установить точную сумму (=)</option>
             </select>
-            <label>Сумма в евро (€)</label>
-            <input type="number" id="m_adj_amt" value="1000000" step="100000">
-            <div class="row" style="gap:6px;margin-top:6px">
-              <button class="btn sm alt m-q-amt" data-val="500000">+500K</button>
-              <button class="btn sm alt m-q-amt" data-val="1000000">+1.0M</button>
-              <button class="btn sm alt m-q-amt" data-val="5000000">+5.0M</button>
-              <button class="btn sm alt m-q-amt" data-val="10000000">+10.0M</button>
+            <label style="margin-top:8px">Сумма</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" id="m_adj_amt" value="1" step="0.1" min="0" style="flex:1">
+              <select id="m_adj_unit" style="width:115px">
+                <option value="mln" selected>млн €</option>
+                <option value="eur">€ (евро)</option>
+              </select>
             </div>
-            <label>Обоснование / комментарий</label>
+            <div id="m_adj_hint" class="fee-hint">Итого: €1 000 000</div>
+            <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button type="button" class="btn sm alt m-q-amt" data-mln="0.5">+500K</button>
+              <button type="button" class="btn sm alt m-q-amt" data-mln="1">+1 млн</button>
+              <button type="button" class="btn sm alt m-q-amt" data-mln="5">+5 млн</button>
+              <button type="button" class="btn sm alt m-q-amt" data-mln="10">+10 млн</button>
+            </div>
+            <label style="margin-top:8px">Обоснование / комментарий</label>
             <input id="m_adj_reason" placeholder="Например: Спонсорский контракт">
             <div class="row" style="margin-top:16px;justify-content:flex-end;gap:8px">
               <button class="btn alt" id="m_adj_cancel">Отмена</button>
               <button class="btn" id="m_adj_save">Сохранить</button>
             </div>
           `, mEl => {
+            const mInp = mEl.querySelector('#m_adj_amt');
+            const mUnit = mEl.querySelector('#m_adj_unit');
+            const mHint = mEl.querySelector('#m_adj_hint');
+            const updateMPreview = () => {
+              const val = Number(String(mInp?.value || '').replace(/\s+/g, '').replace(',', '.'));
+              const isMln = (mUnit?.value || 'mln') === 'mln';
+              if (!Number.isFinite(val) || val < 0) {
+                mHint.textContent = 'Введите корректную сумму';
+                mHint.className = 'fee-hint err';
+                return;
+              }
+              const eur = Math.round(isMln ? val * 1_000_000 : val);
+              mHint.textContent = `Итого: €${eur.toLocaleString('ru-RU')}${eur > 0 ? ` (${(eur / 1_000_000).toFixed(2).replace(/\.?0+$/, '')} млн €)` : ''}`;
+              mHint.className = eur === 0 ? 'fee-hint zero' : 'fee-hint';
+            };
+            if (mInp) mInp.oninput = updateMPreview;
+            if (mUnit) {
+              mUnit.onchange = () => {
+                const cur = Number(String(mInp?.value || '').replace(',', '.'));
+                if (mInp && Number.isFinite(cur)) {
+                  if (mUnit.value === 'eur' && cur < 1000) mInp.value = Math.round(cur * 1_000_000);
+                  else if (mUnit.value === 'mln' && cur >= 1000) mInp.value = parseFloat((cur / 1_000_000).toFixed(6));
+                  mInp.step = mUnit.value === 'mln' ? '0.1' : '100000';
+                }
+                updateMPreview();
+              };
+            }
+            updateMPreview();
             mEl.querySelector('#m_adj_cancel').onclick = () => m.remove();
             mEl.querySelectorAll('.m-q-amt').forEach(qb => qb.onclick = () => {
-              mEl.querySelector('#m_adj_amt').value = qb.dataset.val;
+              const mln = Number(qb.dataset.mln);
+              mInp.value = (mUnit?.value || 'mln') === 'mln' ? mln : Math.round(mln * 1_000_000);
+              updateMPreview();
             });
             mEl.querySelector('#m_adj_save').onclick = async () => {
               const mode = mEl.querySelector('#m_adj_mode').value;
               const amount = mEl.querySelector('#m_adj_amt').value;
+              const unit = mUnit?.value || 'mln';
               const reason = mEl.querySelector('#m_adj_reason').value;
-              const res = await act(() => api('/admin/budget/adjust', { teamId: tid, mode, amount, reason }), 'Бюджет клуба обновлён');
+              const res = await act(() => api('/admin/budget/adjust', { teamId: tid, mode, amount, unit, reason }), 'Бюджет клуба обновлён');
               if (res) {
                 m.remove();
                 re();
@@ -10292,7 +10605,7 @@ async function pgAdmin(app) {
     const q = await api('/admin/ai-queue');
     const fmt = ms => new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     const hm = ms => new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const ST = { wait: ['ждёт', '#2563eb'], queued: ['в очереди на запрос', '#b45309'], gen: ['идёт запрос к ИИ', '#b45309'], hold: ['готов, ждёт начала', '#166534'], live: ['в эфире', '#dc2626'], overdue: ['пропущен (запуск вручную)', '#6b7280'], excluded: ['исключён из автозапуска', '#6b7280'], error: ['ошибка — нужен ручной запуск', '#dc2626'] };
+    const ST = { wait: ['ждёт', '#2563eb'], queued: ['в очереди на запрос', '#b45309'], gen: ['идёт запрос к ИИ', '#b45309'], hold: ['готов, ждёт начала', '#166534'], live: ['в эфире', '#dc2626'], retry: ['ошибка — автоповтор через 30с', '#d97706'], overdue: ['пропущен (запуск вручную)', '#6b7280'], excluded: ['исключён из автозапуска', '#6b7280'], error: ['ошибка — нужен ручной запуск', '#dc2626'] };
     ab.innerHTML = `
     <div class="panel"><h3>Очередь нейросети</h3>
       <p class="muted small" style="margin:0 0 8px">ИИ доступен только администратору. По расписанию реального времени сами играются <b>РПЛ, Кубок России (и Суперкубок), переходные и товарищеские матчи</b>: запрос уходит за ${q.leadSec} с до начала и только для этого матча (${q.items.some(i => !i.light) ? '2 запроса: по тайму' : 'по тайму'}). Первая и Вторая лиги и Медиалига запускаются только вручную и симулируются одним запросом — счёт и статистика.</p>

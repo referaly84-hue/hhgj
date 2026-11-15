@@ -27,7 +27,7 @@ import fs from "fs";
 import zlib from "zlib";
 import crypto2 from "crypto";
 import path from "path";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 function resolveGeminiModel(rawModel) {
   const m = String(rawModel || "").trim();
   if (!m) return "gemini-3.5-flash";
@@ -4134,20 +4134,68 @@ function roundLabel(f) {
 var compName = (f) => compOf(f.comp)?.name || f.comp;
 var winnerOf = (f) => f.hg > f.ag ? f.home : f.hg < f.ag ? f.away : f.pen ? f.pen.winner === "home" ? f.home : f.away : null;
 function parseFeeAmount(feeStr) {
-  if (typeof feeStr === "number") return feeStr;
-  const s = String(feeStr || "").trim();
+  if (typeof feeStr === "number") {
+    if (!Number.isFinite(feeStr) || feeStr <= 0) return 0;
+    const val = feeStr >= 1000 ? feeStr / 1e6 : feeStr;
+    return Math.round(val * 1e6) / 1e6;
+  }
+  let s = String(feeStr || "").trim();
+  if (!s) return 0;
+  s = s.replace(/(\d)[\s\u00A0_]+(?=\d)/g, "$1");
+  if (/^\D*\d{1,3}(?:,\d{3})+(?:\.\d+)?\D*$/.test(s)) {
+    s = s.replace(/,/g, "");
+  } else if (/^\D*\d{1,3}(?:\.\d{3})+(?:,\d+)?\D*$/.test(s)) {
+    s = s.replace(/\./g, "");
+  }
   const numMatch = s.match(/([0-9]+(?:[.,][0-9]+)?)/);
   if (!numMatch) return 0;
   let val = parseFloat(numMatch[1].replace(",", "."));
-  if (/тыс|k|k\b/i.test(s) && !/млн|m|m\b/i.test(s)) {
-    val = val / 1e3;
-  } else if (/млрд|b|b\b/i.test(s)) {
+  if (!Number.isFinite(val) || val <= 0) return 0;
+  const hasMlrd = /млрд|\bbn\b|(?:\d|\s)[bб](?=[\s.,€$₽]|$)/i.test(s);
+  const hasMln = /млн|\bmln\b|\bmio\b|(?:\d|\s)[mм](?=[\s.,€$₽]|$)/i.test(s);
+  const hasK = /тыс|(?:\d|\s)[kк](?=[\s.,€$₽]|$)/i.test(s);
+  if (hasMlrd) {
     val = val * 1e3;
+  } else if (hasK && !hasMln) {
+    val = val / 1e3;
+  } else if (!hasMln && val >= 1000) {
+    val = val / 1e6;
   }
   if (/₽|руб/i.test(s)) {
     val = val / 100;
   }
-  return Math.round(val * 100) / 100;
+  return Math.max(0, Math.round(val * 1e6) / 1e6);
+}
+function formatFeeDisplay(feeAmt) {
+  const num = Number(feeAmt);
+  if (!Number.isFinite(num) || num <= 0) return "€0";
+  if (num < 1) {
+    const k = Math.round(num * 1000);
+    if (k > 0 && Math.abs(num * 1000 - k) < 0.01 && num < 0.1) {
+      return `€${k}K`;
+    }
+    const rounded = parseFloat(num.toFixed(3));
+    return `€${Number.isInteger(rounded * 10) ? rounded.toFixed(1) : rounded}M`;
+  }
+  const rounded = parseFloat(num.toFixed(3));
+  return `€${Number.isInteger(rounded) ? rounded.toFixed(1) : rounded}M`;
+}
+function sanitizeFeePair(rawFee, fallback = "€1.0M") {
+  const hasInput = rawFee !== void 0 && rawFee !== null && String(rawFee).trim() !== "";
+  const src = hasInput ? rawFee : fallback;
+  const feeAmount = parseFeeAmount(src);
+  return { feeStr: formatFeeDisplay(feeAmount), feeAmount };
+}
+function resolveSafeFeeAmount(obj) {
+  const parsed = parseFeeAmount(obj?.fee);
+  if (obj?.feeAmount !== void 0 && obj?.feeAmount !== null) {
+    const raw = Number(obj.feeAmount);
+    if (Number.isFinite(raw)) {
+      if (raw >= 1000) return parsed > 0 && parsed < 1000 ? parsed : Math.round((raw / 1e6) * 1e6) / 1e6;
+      return raw;
+    }
+  }
+  return parsed;
 }
 function executeTransferIfBothApproved(t) {
   if (t.status === "approved") return true;
@@ -4209,7 +4257,7 @@ function executeTransferIfBothApproved(t) {
         impactScore: (p.goals || 0) * 4 + (p.assists || 0) * 2.5 + (p.matches || 0) * 1.2 + ((p.rating || 7) >= 6.5 ? ((p.rating || 7) - 6) * 10 : 0),
         summary: `${p.goals || 0} \u0433\u043E\u043B\u043E\u0432, ${p.assists || 0} \u0430\u0441\u0441\u0438\u0441\u0442\u043E\u0432 \u0432 ${p.matches || 0} \u043C\u0430\u0442\u0447\u0430\u0445`
       };
-      const feeAmt = t.feeAmount !== void 0 ? t.feeAmount : parseFeeAmount(t.fee);
+      const feeAmt = resolveSafeFeeAmount(t);
       const buyer = team(t.to);
       const seller = team(t.from);
       if (feeAmt && feeAmt > 0) {
@@ -4992,6 +5040,9 @@ async function callProv(p, sys, user, o) {
         config.temperature = o.temp;
         config.maxOutputTokens = Math.min(o.max, p.max);
       }
+      if (/^gemini-(?:3(?:\.\d+)?(?:-flash)?|4-)/i.test(model) && !/flash-lite/i.test(model)) {
+        config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+      }
       try {
         const resp = await ai.models.generateContent({
           model,
@@ -5063,7 +5114,7 @@ var coolModel = (p, model, e) => {
   const ms = e.daily ? 15 * 6e4 : e.status === 429 ? 9e4 : e.status >= 500 || e.name === "AbortError" ? 3e4 : 6e4;
   modelCooldown.set(`${p.key}|${model}`, Date.now() + ms);
 };
-var GEMINI_FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+var GEMINI_FALLBACK_MODELS = ["gemini-4-hydrogen", "gemini-3.5-flash", "gemini-3.1-flash-lite"];
 async function llm(sys, user, { json = true, task = "", temp = 0.9, max = 16e3, grounded = false } = {}) {
   const cx = aiCtx.getStore();
   if (!cx?.ai) throw Object.assign(new Error("\u0418\u0418 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0442\u043E\u043B\u044C\u043A\u043E \u0430\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440\u0443"), { noLLM: true });
@@ -5108,21 +5159,33 @@ async function llm(sys, user, { json = true, task = "", temp = 0.9, max = 16e3, 
     if (cx.cap && cx.calls >= cx.cap) throw Object.assign(new Error(`\u043B\u0438\u043C\u0438\u0442 \u0418\u0418-\u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432 \u043D\u0430 \u043C\u0430\u0442\u0447 (${cx.cap}) \u0438\u0441\u0447\u0435\u0440\u043F\u0430\u043D`), { capped: true });
     cx.calls++;
     const t0 = Date.now();
+    let rawText = "";
     try {
       const text = await callProv(provRun, sys, user, { json, temp, max, grounded: att.grounded });
-      if (!text.trim()) throw new Error("\u043F\u0443\u0441\u0442\u043E\u0439 \u043E\u0442\u0432\u0435\u0442");
+      rawText = String(text || "");
+      if (!rawText.trim()) throw Object.assign(new Error("\u043F\u0443\u0441\u0442\u043E\u0439 \u043E\u0442\u0432\u0435\u0442"), { badJson: true });
+      if (json) {
+        try {
+          parseJSON(rawText);
+        } catch (je: any) {
+          throw Object.assign(new Error(je?.message || "\u043D\u0435\u0439\u0440\u043E\u0441\u0435\u0442\u044C \u0432\u0435\u0440\u043D\u0443\u043B\u0430 \u043D\u0435-JSON"), { badJson: true });
+        }
+      }
       if (p.n === "gemini") modelCooldown.delete(`${p.key}|${provRun.model}`);
       llog({ task, p: provRun.id || provRun.n, ok: 1, ms: Date.now() - t0 });
-      recordAiHistory({ task, provider: provRun.n, model: provRun.model, user, sys, ok: 1, ms: Date.now() - t0, response: text });
-      return text;
+      recordAiHistory({ task, provider: provRun.n, model: provRun.model, user, sys, ok: 1, ms: Date.now() - t0, response: rawText });
+      return rawText;
     } catch (e: any) {
       last = e;
       llog({ task, p: provRun.id || provRun.n, ok: 0, ms: Date.now() - t0, err: String(e.message || e).slice(0, 160) });
-      recordAiHistory({ task, provider: provRun.n, model: provRun.model, user, sys, ok: 0, ms: Date.now() - t0, err: e.message || String(e) });
-      if (e.status === 401 || e.status === 403) {
+      recordAiHistory({ task, provider: provRun.n, model: provRun.model, user, sys, ok: 0, ms: Date.now() - t0, response: rawText, err: e.message || String(e) });
+      if (e.badJson) {
+        cx.calls = Math.max(0, cx.calls - 1);
+        await sleep(150);
+      } else if (e.status === 401 || e.status === 403) {
         coolKey(p, e);
       } else if (e.status === 429 || e.status === 404 || e.status >= 500 || e.name === "AbortError") {
-        cx.calls--;
+        cx.calls = Math.max(0, cx.calls - 1);
         if (p.n === "gemini") {
           if (att.grounded) {
             const ms = e.daily ? 15 * 6e4 : e.status === 429 ? 3 * 6e4 : 6e4;
@@ -5139,17 +5202,131 @@ async function llm(sys, user, { json = true, task = "", temp = 0.9, max = 16e3, 
   }
   throw last;
 }
+function repairJsonCandidate(raw: string) {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inStr) {
+      if (esc) {
+        out += ch;
+        esc = false;
+      } else if (ch === "\\") {
+        out += ch;
+        esc = true;
+      } else if (ch === "\"") {
+        out += ch;
+        inStr = false;
+      } else if (ch === "\n") {
+        out += "\\n";
+      } else if (ch === "\r") {
+        out += "\\r";
+      } else if (ch === "\t") {
+        out += "\\t";
+      } else if (ch.charCodeAt(0) < 32) {
+        out += " ";
+      } else {
+        out += ch;
+      }
+      continue;
+    }
+    if (ch === "\"") {
+      inStr = true;
+      out += ch;
+      continue;
+    }
+    if (ch === "/" && raw[i + 1] === "/") {
+      while (i < raw.length && raw[i] !== "\n") i++;
+      continue;
+    }
+    out += ch;
+  }
+  return out.replace(/,\s*([}\]])/g, "$1");
+}
+function recoverTruncatedEventsJson(t: string) {
+  const arrStart = t.search(/"events"\s*:\s*\[|^\s*\[/m);
+  if (arrStart < 0) return null;
+  const openBracket = t.indexOf("[", arrStart);
+  if (openBracket < 0) return null;
+  const recovered: any[] = [];
+  let inStr = false;
+  let esc = false;
+  let depth = 0;
+  let objStart = -1;
+  for (let i = openBracket + 1; i < t.length; i++) {
+    const ch = t[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === "\"") inStr = false;
+      continue;
+    }
+    if (ch === "\"") {
+      inStr = true;
+      continue;
+    }
+    if (ch === "{") {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === "}") {
+      if (depth > 0) {
+        depth--;
+        if (depth === 0 && objStart >= 0) {
+          const slice = t.slice(objStart, i + 1);
+          try {
+            const obj = JSON.parse(repairJsonCandidate(slice));
+            if (obj && typeof obj === "object" && (typeof obj.type === "string" || typeof obj.text === "string" || typeof obj.min === "number")) {
+              recovered.push(obj);
+            }
+          } catch {
+          }
+          objStart = -1;
+        }
+      }
+    } else if (ch === "]" && depth === 0) {
+      break;
+    }
+  }
+  if (recovered.length >= 6) {
+    return { events: recovered, state_at_end: { momentum_note: "" }, _repaired: true };
+  }
+  return null;
+}
 function parseJSON(t) {
-  t = String(t).replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, "").trim();
-  try {
-    return JSON.parse(t);
-  } catch {
+  let s = String(t || "").replace(/^\uFEFF/, "").trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence?.[1]) s = fence[1].trim();
+  else s = s.replace(/^\s*```(?:json)?\s*|\s*```\s*$/gi, "").trim();
+  const tryParse = (c: string) => {
+    try {
+      return JSON.parse(c);
+    } catch {
+      try {
+        return JSON.parse(repairJsonCandidate(c));
+      } catch {
+        return void 0;
+      }
+    }
+  };
+  let parsed = tryParse(s);
+  if (parsed !== void 0) return parsed;
+  const firstObj = s.indexOf("{"), lastObj = s.lastIndexOf("}");
+  const firstArr = s.indexOf("["), lastArr = s.lastIndexOf("]");
+  if (firstArr >= 0 && lastArr > firstArr && (firstObj < 0 || firstArr < firstObj)) {
+    parsed = tryParse(s.slice(firstArr, lastArr + 1));
+    if (parsed !== void 0) return parsed;
   }
-  const a = t.indexOf("{"), b = t.lastIndexOf("}");
-  if (a >= 0 && b > a) try {
-    return JSON.parse(t.slice(a, b + 1));
-  } catch {
+  if (firstObj >= 0 && lastObj > firstObj) {
+    parsed = tryParse(s.slice(firstObj, lastObj + 1));
+    if (parsed !== void 0) return parsed;
   }
+  if (firstArr >= 0 && lastArr > firstArr) {
+    parsed = tryParse(s.slice(firstArr, lastArr + 1));
+    if (parsed !== void 0) return parsed;
+  }
+  const recovered = recoverTruncatedEventsJson(s);
+  if (recovered) return recovered;
   throw new Error("\u043D\u0435\u0439\u0440\u043E\u0441\u0435\u0442\u044C \u0432\u0435\u0440\u043D\u0443\u043B\u0430 \u043D\u0435-JSON");
 }
 var llmJSON = async (s, u, o) => parseJSON(await llm(s, u, o));
@@ -5292,9 +5469,11 @@ function formationSlots(formation: string) {
     const cm = midParts.length >= 3 ? midParts.slice(1, -1).reduce((a, b) => a + b, 0) : 0;
     if (dm === 1) slots.push("ОП");
     else if (dm === 2) slots.push("ОП", "ОП");
-    else if (dm >= 3) {
-      slots.push("ОП", "ЦП", "ОП");
-      for (let i = 3; i < dm; i++) slots.push("ОП");
+    else if (dm === 3) slots.push("ЦП", "ОП", "ЦП");
+    else if (dm === 4) slots.push("ЛП", "ЦП", "ЦП", "ПП");
+    else if (dm >= 5) {
+      slots.push("ЛП", "ОП", "ЦП", "ОП", "ПП");
+      for (let i = 5; i < dm; i++) slots.push("ЦП");
     }
     for (let i = 0; i < cm; i++) slots.push("ЦП");
     if (am === 1) slots.push("АП");
@@ -5466,7 +5645,8 @@ function assignFormationSlots(formation: string, starterIds: string[], explicitS
     for (let i = 0; i < starters.length; i++) {
       const item = explicitSlots[i];
       const pid = String(typeof item === "string" ? item : item?.pid || "").trim();
-      const slotPos = String(typeof item === "object" && item?.slot ? item.slot : slots[i] || "ЦП");
+      const rawSlot = typeof item === "object" && item?.slot ? normPosCode(String(item.slot)) : "";
+      const slotPos = POSES.includes(rawSlot) ? rawSlot : (slots[i] || "ЦП");
       if (!pid || !validSet.has(pid) || seen.has(pid)) {
         ok = false;
         break;
@@ -6243,8 +6423,8 @@ ${lineText(ctx, "away")}
   }
   const span = b - a + 1;
   u += `
-\u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u043E\u0442\u0440\u0435\u0437\u043E\u043A \u043C\u0430\u0442\u0447\u0430 (\u043C\u0438\u043D\u0443\u0442\u044B ${a}\u2013${b}) \u0441\u0442\u0440\u043E\u0433\u043E \u0432 \u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C JSON \u0431\u0435\u0437 markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438 \u043F\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043F\u0440\u043E\u043C\u043F\u0442\u0430 (\u0440\u0430\u0437\u0434\u0435\u043B 10 \u2014 \u0444\u043E\u0440\u043C\u0430\u0442 \u0432\u044B\u0432\u043E\u0434\u0430).`;
-  u += ` \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 \u043F\u043E \u0447\u0438\u0441\u043B\u0443 \u0438\u0433\u0440\u043E\u0432\u044B\u0445 \u0441\u043E\u0431\u044B\u0442\u0438\u0439 \u0432 \u044D\u0442\u043E\u043C \u043E\u0442\u0440\u0435\u0437\u043A\u0435: ${Math.round(span / 45 * 70)}\u2013${Math.round(span / 45 * 150)}.`;
+\u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u043E\u0442\u0440\u0435\u0437\u043E\u043A \u043C\u0430\u0442\u0447\u0430 (\u043C\u0438\u043D\u0443\u0442\u044B ${a}\u2013${b}) \u0441\u0442\u0440\u043E\u0433\u043E \u0432 \u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C JSON \u0431\u0435\u0437 markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438 \u043F\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043F\u0440\u043E\u043C\u043F\u0442\u0430 (\u0440\u0430\u0437\u0434\u0435\u043B 10 \u2014 \u0444\u043E\u0440\u043C\u0430\u0442 \u0432\u044B\u0432\u043E\u0434\u0430). \u0422\u0435\u043A\u0441\u0442 \u043A\u0430\u0436\u0434\u043E\u0433\u043E \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0434\u0435\u0440\u0436\u0438 \u0451\u043C\u043A\u0438\u043C (1\u20132 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F), \u0447\u0442\u043E\u0431\u044B \u0432\u0435\u0441\u044C JSON \u0433\u0430\u0440\u0430\u043D\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E \u043F\u043E\u043C\u0435\u0441\u0442\u0438\u043B\u0441\u044F \u0432 \u043E\u0442\u0432\u0435\u0442 \u0446\u0435\u043B\u0438\u043A\u043E\u043C.`;
+  u += ` \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 \u043F\u043E \u0447\u0438\u0441\u043B\u0443 \u0438\u0433\u0440\u043E\u0432\u044B\u0445 \u0441\u043E\u0431\u044B\u0442\u0438\u0439 \u0432 \u044D\u0442\u043E\u043C \u043E\u0442\u0440\u0435\u0437\u043A\u0435: ${Math.max(12, Math.round(span / 45 * 50))}\u2013${Math.max(22, Math.round(span / 45 * 85))}.`;
   if (a === 1) u += ` \u042D\u0442\u043E \u041D\u0410\u0427\u0410\u041B\u041E \u044D\u0444\u0438\u0440\u0430: \u0441\u043D\u0430\u0447\u0430\u043B\u0430 \u043F\u0440\u0435\u043C\u0430\u0442\u0447 \u043F\u043E \u0440\u0430\u0437\u0434\u0435\u043B\u0443 0 (\u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0441 \u043E\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C\u0438 \u043C\u0438\u043D\u0443\u0442\u0430\u043C\u0438 \u043E\u0442 -15 \u0434\u043E -1 \u0438 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u043C\u0438 \u0434\u043B\u044F \u043D\u0435\u0433\u043E \u0442\u0438\u043F\u0430\u043C\u0438), \u0437\u0430\u0442\u0435\u043C kickoff \u043D\u0430 1-\u0439 \u043C\u0438\u043D\u0443\u0442\u0435 \u0438 \u0438\u0433\u0440\u0430.`;
   else u += ` \u041F\u0440\u0435\u043C\u0430\u0442\u0447 \u0443\u0436\u0435 \u043F\u0440\u043E\u0448\u0451\u043B: \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0441 \u043E\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C\u0438 \u043C\u0438\u043D\u0443\u0442\u0430\u043C\u0438 \u041D\u0415 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439, \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0441 \u043C\u0438\u043D\u0443\u0442\u044B ${a}.`;
   if (b >= 90) u += ` \u042D\u0442\u043E \u043A\u043E\u043D\u0435\u0446 \u043C\u0430\u0442\u0447\u0430: \u0437\u0430\u0432\u0435\u0440\u0448\u0438 \u0441\u043E\u0431\u044B\u0442\u0438\u0435\u043C fulltime; \u043F\u043E\u0441\u043B\u0435 \u0444\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0441\u0432\u0438\u0441\u0442\u043A\u0430 \u043F\u043E \u0440\u0430\u0437\u0434\u0435\u043B\u0443 0.8 \u043C\u043E\u0436\u043D\u043E \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C 1\u20133 \u0441\u043E\u0431\u044B\u0442\u0438\u044F (min 90\u201395, \u0442\u0438\u043F\u044B crowd | tactical_note | incident).`;
@@ -6698,7 +6878,8 @@ async function genPeriod(a, b, ctx, prev, note, depth = 0) {
   const sys = db.settings.systemPrompt || SYS_DEFAULT;
   if (!hasLLM()) return { events: fakePeriod(a, b, ctx, prev), note };
   let issues = "", lastErr = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const maxAttempts = b - a >= 18 && depth === 0 ? 1 : 2;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const st = prev.length ? deriveState(prev, ctx, note) : null;
       const user = buildUser(ctx, a, b, st, issues);
@@ -6707,11 +6888,17 @@ async function genPeriod(a, b, ctx, prev, note, depth = 0) {
       const rawEvents = Array.isArray(r) ? r : r?.events || r?.match_events || [];
       const evs = normalizeEvents(rawEvents, a, b, ctx, prev);
       return { events: evs, note: r?.state_at_end?.momentum_note || note };
-    } catch (e) {
+    } catch (e: any) {
       lastErr = e.message;
       issues = e.message;
       if (e.noLLM || e.capped) break;
     }
+  }
+  if (b - a >= 14 && depth < 2) {
+    const mid = Math.floor((a + b) / 2);
+    const r1 = await genPeriod(a, mid, ctx, prev, note, depth + 1);
+    const r2 = await genPeriod(mid + 1, b, ctx, prev.concat(r1.events), r1.note, depth + 1);
+    return { events: r1.events.concat(r2.events), note: r2.note };
   }
   throw new Error(`\u0418\u0418 \u043D\u0435 \u0432\u0435\u0440\u043D\u0443\u043B \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 \u043F\u0435\u0440\u0438\u043E\u0434 ${a}\u2013${b}: ${lastErr}`);
 }
@@ -6999,6 +7186,11 @@ function enqueue(id, force = false, manual = true) {
   }
   f.status = "queued";
   f.err = "";
+  if (manual) {
+    f.autoRetries = 0;
+    f.autoRetryAt = 0;
+    f.noAuto = false;
+  }
   save();
   queue.push({ id, manual });
   pumpQ();
@@ -7044,6 +7236,9 @@ async function runMatch(id, opts = {}) {
       events.forEach((e, i) => e.i = i);
       const [h, a] = rescore(events);
       f.aiCalls = store.calls;
+      f.err = "";
+      f.autoRetries = 0;
+      f.autoRetryAt = 0;
       putMatch(id, { events, ctx, fallback, light, lightStats });
       f.final = [h, a];
       f.hg = 0;
@@ -7074,12 +7269,20 @@ async function runMatch(id, opts = {}) {
       } else {
         beginLive(id);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("\u043C\u0430\u0442\u0447 \u043D\u0435 \u0443\u0434\u0430\u043B\u0441\u044F:", e);
       f.aiCalls = store.calls;
       f.status = "scheduled";
       f.err = e.message;
-      if (!opts.manual) f.noAuto = true;
+      if (!opts.manual) {
+        f.autoRetries = (f.autoRetries || 0) + 1;
+        if (e.noLLM || f.autoRetries >= 3) {
+          f.noAuto = true;
+          f.autoRetryAt = 0;
+        } else {
+          f.autoRetryAt = Date.now() + f.autoRetries * 3e4;
+        }
+      }
       save();
     }
   });
@@ -9021,6 +9224,7 @@ var pubFx = (f) => {
     gameTime: f.gameTime || f.time,
     realDate: f.realDate || f.date,
     realTime: f.realTime || f.time,
+    realStartAt: realAt(f).getTime(),
     home: f.home,
     away: f.away,
     homeName: tn(f.home),
@@ -11341,12 +11545,12 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
       const fromTeam = team(p.teamId);
       const toTeam = team(req.tid);
       const isRplToRpl = fromTeam?.comp === "rpl" && toTeam?.comp === "rpl";
-      const feeStr = String(req.body.fee || "\u20AC5.0M").trim();
-      const feeNum = parseFeeAmount(feeStr);
       const isExchange = String(req.body.transferType || req.body.type || "") === "exchange" || !!req.body.exchangePid;
+      const defaultFee = isExchange ? "€0" : "€1.0M";
+      const { feeStr, feeAmount: feeNum } = sanitizeFeePair(req.body.fee, defaultFee);
       const isMandatoryBuyout = String(req.body.transferType || req.body.type || "").includes("mandatory") || !!req.body.mandatoryBuyout;
       const isLoan = !isExchange && (String(req.body.transferType || req.body.type || "").includes("loan") || isMandatoryBuyout);
-      const buyoutFeeStr = isMandatoryBuyout ? String(req.body.buyoutFee || feeStr || "\u20AC8.0M").trim() : null;
+      const buyoutFeeStr = isMandatoryBuyout ? sanitizeFeePair(req.body.buyoutFee, feeNum > 0 ? feeStr : "€1.0M").feeStr : null;
       const loanCondition = isMandatoryBuyout ? String(req.body.loanCondition || req.body.buyoutCondition || "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0438\u0441\u043A\u0438 \u0432 \u0420\u041F\u041B").trim() : null;
       const sellOnPct = Math.min(90, Math.max(0, Number(req.body.sellOnPercent) || 0));
       let exchangeP = null;
@@ -11497,7 +11701,7 @@ app.post("/api/club/squad/add-batch", needClub, async (req, res) => {
         const toTeam = team(req.tid);
         const isRplToRpl = fromTeam?.comp === "rpl" && toTeam?.comp === "rpl";
         const feeStr = "\u20AC5.0M";
-        const feeNum = 5e6;
+        const feeNum = 5;
         const trObj = {
           id: uid(),
           pid: p.id,
@@ -12838,6 +13042,7 @@ app.get("/api/admin/ai-queue", admin, (req, res) => {
     if (f.status === "queued") state = "queued";
     else if (f.status === "generating") state = f.hold ? "hold" : "gen";
     else if (f.status === "live") state = "live";
+    else if (f.err && !f.noAuto && (f.autoRetries || 0) > 0 && (f.autoRetries || 0) < 3) state = "retry";
     else if (f.err) state = "error";
     else if (f.noAuto) state = "excluded";
     else if (now - t > AI_MAX_LATE_MS) state = "overdue";
@@ -12877,7 +13082,11 @@ app.post("/api/admin/ai-queue/toggle", admin, (req, res) => {
   const f = fx(req.body.id);
   if (!f) return fail(res, "\u041C\u0430\u0442\u0447 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
   f.noAuto = !!req.body.noAuto;
-  if (!f.noAuto) f.err = "";
+  if (!f.noAuto) {
+    f.err = "";
+    f.autoRetries = 0;
+    f.autoRetryAt = 0;
+  }
   save();
   res.json({ ok: 1 });
 });
@@ -12917,7 +13126,7 @@ app.post("/api/admin/fixture", admin, (req, res) => {
     if (f.status === "live" || f.hold) {
       clearTimeout(timers[f.id]);
     }
-    Object.assign(f, { status: "scheduled", hg: null, ag: null, pen: null, st: null, pos: 0, final: null, err: "", hold: null, aiCalls: 0, noAuto: false });
+    Object.assign(f, { status: "scheduled", hg: null, ag: null, pen: null, st: null, pos: 0, final: null, err: "", hold: null, aiCalls: 0, noAuto: false, autoRetries: 0, autoRetryAt: 0 });
     try {
       fs3.unlinkSync(path3.join(MDIR, f.id + ".json"));
     } catch {
@@ -12965,6 +13174,8 @@ app.post("/api/admin/fixture", admin, (req, res) => {
   if (realSchedChanged) {
     f.noAuto = false;
     f.err = "";
+    f.autoRetries = 0;
+    f.autoRetryAt = 0;
     if (f.status === "generating" && f.hold) {
       clearTimeout(timers[f.id]);
       delete timers[f.id];
@@ -13171,11 +13382,12 @@ app.get("/api/admin/budgets", admin, (req, res) => {
 });
 app.post("/api/admin/budget/adjust", admin, (req, res) => {
   ensureInitialBudgets();
-  const { teamId, amount, mode, reason } = req.body;
+  const { teamId, amount, mode, reason, unit } = req.body;
   const t = team(teamId);
   if (!t) return fail(res, "\u041A\u043B\u0443\u0431 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
-  const numAmt = Number(amount);
-  if (isNaN(numAmt)) return fail(res, "\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0430\u044F \u0441\u0443\u043C\u043C\u0430");
+  const rawAmt = Number(String(amount ?? "").replace(/\s+/g, "").replace(",", "."));
+  const numAmt = unit === "mln" ? rawAmt * 1e6 : rawAmt;
+  if (!Number.isFinite(numAmt)) return fail(res, "\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0430\u044F \u0441\u0443\u043C\u043C\u0430");
   const prevBudget = t.budget || 0;
   let newBudget = prevBudget;
   let diff = 0;
@@ -14132,8 +14344,7 @@ app.post("/api/club/staff/offer", needClub, (req, res) => {
   if ((db.staffOffers || []).some((o2) => o2.status === "pending" && o2.staffId === m.id && o2.to === req.tid)) {
     return fail(res, "\u0412\u044B \u0443\u0436\u0435 \u043F\u043E\u0434\u0430\u043B\u0438 \u0437\u0430\u044F\u0432\u043A\u0443 \u043D\u0430 \u044D\u0442\u043E\u0433\u043E \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u0438\u0441\u0442\u0430 \u2014 \u0434\u043E\u0436\u0434\u0438\u0442\u0435\u0441\u044C \u0440\u0435\u0448\u0435\u043D\u0438\u044F");
   }
-  const feeStr = String(req.body.fee || "\u20AC1.0M").trim().slice(0, 30);
-  const feeAmount = parseFeeAmount(feeStr);
+  const { feeStr, feeAmount } = sanitizeFeePair(req.body.fee, "\u20AC1.0M");
   if (!(feeAmount >= 0)) return fail(res, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0440\u0430\u0437\u043E\u0431\u0440\u0430\u0442\u044C \u0441\u0443\u043C\u043C\u0443 \u043A\u043E\u043C\u043F\u0435\u043D\u0441\u0430\u0446\u0438\u0438 (\u043F\u0440\u0438\u043C\u0435\u0440: \u20AC1.5M)");
   if (offerFeeEuros({ feeAmount }) > (buyer.budget || 0)) return fail(res, "\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u0441\u0440\u0435\u0434\u0441\u0442\u0432 \u0432 \u0431\u044E\u0434\u0436\u0435\u0442\u0435 \u043A\u043B\u0443\u0431\u0430 \u0434\u043B\u044F \u0442\u0430\u043A\u043E\u0439 \u043A\u043E\u043C\u043F\u0435\u043D\u0441\u0430\u0446\u0438\u0438");
   let targetRole = String(req.body.targetRole || "").trim();
@@ -14966,8 +15177,7 @@ app.post("/api/admin/transfer/direct", admin, (req, res) => {
   if (!p || !toTeam) return fail(res, "\u0418\u0433\u0440\u043E\u043A \u0438\u043B\u0438 \u043A\u043B\u0443\u0431 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D");
   const fromTeamId = p.teamId;
   const fromTeam = team(fromTeamId);
-  const feeStr = String(fee || "\u20AC5.0M").trim();
-  const feeNum = parseFeeAmount(feeStr);
+  const { feeStr, feeAmount: feeNum } = sanitizeFeePair(fee, "\u20AC1.0M");
   const loanMap = {
     "loan_0.5": "\u0410\u0440\u0435\u043D\u0434\u0430 (0.5 \u0433\u043E\u0434\u0430)",
     "loan_1": "\u0410\u0440\u0435\u043D\u0434\u0430 (1 \u0433\u043E\u0434)",
@@ -14977,7 +15187,7 @@ app.post("/api/admin/transfer/direct", admin, (req, res) => {
   };
   const isMandatoryBuyout = transferType === "loan_mandatory_rpl" || !!req.body.mandatoryBuyout;
   const isLoan = !!loanMap[transferType] || isMandatoryBuyout;
-  const buyoutFeeStr = isMandatoryBuyout ? String(req.body.buyoutFee || feeStr || "\u20AC8.0M").trim() : null;
+  const buyoutFeeStr = isMandatoryBuyout ? sanitizeFeePair(req.body.buyoutFee, feeNum > 0 ? feeStr : "\u20AC1.0M").feeStr : null;
   const loanCondition = isMandatoryBuyout ? String(req.body.loanCondition || req.body.buyoutCondition || "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0438\u0441\u043A\u0438 \u0432 \u0420\u041F\u041B").trim() : null;
   const sellOnPct = Math.min(90, Math.max(0, Number(req.body.sellOnPercent) || 0));
   let note = isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${buyoutFeeStr})${loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCondition}\xBB` : ""}` : loanMap[transferType] || "\u041F\u043E\u043B\u043D\u043E\u0446\u0435\u043D\u043D\u044B\u0439 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440";
@@ -15422,7 +15632,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
           parsedClub = tok.replace(/^клуб[:\s]+/i, "").trim();
           continue;
         }
-        if (!feePart && (/[€$₽]|\b\d+(?:[.,]\d+)?\s*(?:M|K|млн|тыс)\b/i.test(tok) || /^\d+(?:[.,]\d+)?$/.test(tok))) {
+        if (!feePart && (/[€$₽]|\b\d+(?:[.,]\d+)?\s*(?:M|K|млн|тыс)\b/i.test(tok) || /^\d[\d\s\u00A0]*(?:[.,]\d+)?$/.test(tok))) {
           feePart = tok;
           continue;
         }
@@ -15454,33 +15664,36 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
           parsedNat = freeTextTokens[0];
         }
       }
-      if (!feePart) feePart = "€5.0M";
+      if (!feePart) feePart = "€1.0M";
+      const parsedBatchFee = sanitizeFeePair(feePart, "€1.0M");
       itemsToProcess.push({
         name,
         pos: parsedPos,
         age: parsedAge,
         nationality: parsedNat,
         fromClub: parsedClub,
-        fee: feePart,
+        fee: parsedBatchFee.feeStr,
         type: isMand ? "loan_mandatory_rpl" : isLoan ? "loan" : "transfer",
         mandatoryBuyout: isMand,
-        buyoutFee: isMand ? feePart : void 0,
+        buyoutFee: isMand ? parsedBatchFee.feeStr : void 0,
         loanCondition: cond,
         sellOnPercent: sellOnPct
       });
     }
   } else if (playerName) {
     const isMand = String(transferType || "").includes("mandatory") || !!req.body.mandatoryBuyout;
+    const isLn = isMand || String(transferType || "").includes("loan");
+    const parsedSingleFee = sanitizeFeePair(fee, isLn ? "€0" : "€1.0M");
     itemsToProcess.push({
       name: String(playerName).trim(),
       pos: normalizeEuroPos(pos),
       age: parseEuroAge(age),
       nationality: String(nationality || nation || country || fromCountry || "").trim(),
       fromClub: String(fromClub || club || europeanClub || "").trim(),
-      fee: String(fee || "€5.0M").trim(),
+      fee: parsedSingleFee.feeStr,
       type: isMand ? "loan_mandatory_rpl" : String(transferType || "").includes("loan") ? "loan" : "transfer",
       mandatoryBuyout: isMand,
-      buyoutFee: isMand ? String(req.body.buyoutFee || fee || "€8.0M").trim() : void 0,
+      buyoutFee: isMand ? sanitizeFeePair(req.body.buyoutFee, parsedSingleFee.feeAmount > 0 ? parsedSingleFee.feeStr : "€1.0M").feeStr : void 0,
       loanCondition: isMand ? String(req.body.loanCondition || req.body.buyoutCondition || "Сохранение прописки в РПЛ").trim() : void 0,
       sellOnPercent: Math.min(90, Math.max(0, Number(req.body.sellOnPercent) || 0))
     });
@@ -15496,6 +15709,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       nationality: item.nationality,
       fromClub: item.fromClub
     });
+    const finalFee = sanitizeFeePair(item.fee, enriched.marketValue || "€1.0M");
     const reqObj = {
       id: "trq_" + uid(),
       clubId: targetClubId,
@@ -15509,8 +15723,8 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       marketValue: enriched.marketValue,
       ovr: enriched.ovr,
       style: enriched.style,
-      fee: item.fee || enriched.marketValue || "По согласованию",
-      feeAmount: parseFeeAmount(item.fee || enriched.marketValue),
+      fee: finalFee.feeStr,
+      feeAmount: finalFee.feeAmount,
       transferType: item.type,
       mandatoryBuyoutOnRplRetention: !!item.mandatoryBuyout,
       mandatoryBuyout: !!item.mandatoryBuyout,
@@ -15667,7 +15881,7 @@ app.post("/api/admin/transfer-requests/resolve", admin, (req, res) => {
   const buyer = team(r.clubId);
   if (action === "approve") {
     r.status = "approved";
-    const feeAmt = r.feeAmount !== void 0 ? r.feeAmount : parseFeeAmount(r.fee);
+    const feeAmt = resolveSafeFeeAmount(r);
     const isMand = !!(r.mandatoryBuyoutOnRplRetention || r.transferType === "loan_mandatory_rpl");
     if (feeAmt && feeAmt > 0 && buyer) {
       const feeEuros = Math.round(feeAmt * 1e6);
@@ -16059,6 +16273,7 @@ function runAutoStartTick() {
       continue;
     }
     if (f.status !== "scheduled" || f.noAuto || !isAutoFx(f)) continue;
+    if (f.autoRetryAt && now < f.autoRetryAt) continue;
     const t = realAt(f).getTime();
     if (!Number.isFinite(t)) continue;
     if (t - lead > now) continue;
