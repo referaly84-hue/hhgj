@@ -1254,20 +1254,119 @@ const fmtRuDate = d => {
   return s;
 };
 
+const getGameDate = () => {
+  const gd = String(S.st?.gameDate || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(gd)) return gd;
+  const sm = String(S.st?.season || '').match(/^(\d{4})/);
+  if (sm) return `${sm[1]}-07-18`;
+  return new Date().toISOString().slice(0, 10);
+};
+
 const defaultLoanUntil = (typeVal = 'loan') => {
-  const now = new Date();
-  const yr = now.getFullYear();
-  const mo = now.getMonth() + 1;
-  const startYr = mo >= 6 ? yr : yr - 1;
+  const base = getGameDate();
+  const yr = +base.slice(0, 4);
+  const mo = +base.slice(5, 7);
+  const seasonStr = String(S.st?.season || '');
+  const sm = seasonStr.match(/^(\d{4})/);
+  const startYr = sm ? +sm[1] : (mo >= 6 ? yr : yr - 1);
   const endYr = startYr + 1;
   const tt = String(typeVal || '').toLowerCase();
   if (tt === 'loan_2') return `${endYr + 1}-06-30`;
-  if (tt === 'loan_1.5') return mo >= 6 ? `${endYr}-12-31` : `${endYr + 1}-06-30`;
+  if (tt === 'loan_1.5') {
+    if (base >= `${endYr}-05-15`) return `${endYr + 1}-12-31`;
+    return mo >= 6 ? `${endYr}-12-31` : `${endYr + 1}-06-30`;
+  }
   if (tt === 'loan_0.5') {
     if (mo >= 6 && mo <= 11) return `${startYr}-12-31`;
+    if (base >= `${endYr}-05-15`) return `${endYr}-12-31`;
     return mo === 12 ? `${yr + 1}-06-30` : `${endYr}-06-30`;
   }
+  if (base >= `${endYr}-05-15`) return `${endYr + 1}-06-30`;
   return `${endYr}-06-30`;
+};
+
+const openAdminLoanModal = (p, onSaved) => {
+  if (!p || S.me?.role !== 'admin') return;
+  const gd = getGameDate();
+  const isCurrentlyLoaned = !!(p.loanFrom || p.loanUntil || (p.loanTerm && /аренд/i.test(p.loanTerm)));
+  const teamsList = (S.st?.teams || []).map(t => `<option value="${e(t.name)}">`).join('');
+  const d05 = defaultLoanUntil('loan_0.5');
+  const d1 = defaultLoanUntil('loan_1');
+  const d15 = defaultLoanUntil('loan_1.5');
+  const d2 = defaultLoanUntil('loan_2');
+  modal(`<h3>🔄 Срок и условия аренды</h3>
+    <div style="margin-bottom:10px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
+      <div style="font-weight:700;font-size:15px">${e(p.name)} <span class="tag sm">${e(p.pos || 'ЦП')}</span></div>
+      <div class="small muted" style="margin-top:3px">🎮 Игровое время: <b>${e(fmtRuDate(gd))}</b>${S.st?.season ? ` · Сезон ${e(S.st.season)}` : ''}</div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;margin-bottom:10px">
+      <input type="checkbox" id="ml_isLoan" ${isCurrentlyLoaned ? 'checked' : ''} style="width:auto">
+      <span>Игрок находится в аренде</span>
+    </label>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      <div style="flex:1.3;min-width:170px">
+        <label style="font-weight:600;color:#0369a1">В аренде из клуба</label>
+        <input id="ml_from" list="ml_teams_dl" value="${e(p.loanFrom || '')}" placeholder="Например: Зенит или Реал Мадрид">
+        <datalist id="ml_teams_dl">${teamsList}</datalist>
+      </div>
+      <div style="flex:1;min-width:155px">
+        <label style="font-weight:600;color:#0369a1">Аренда до даты</label>
+        <input type="date" id="ml_until" value="${e(p.loanUntil || (isCurrentlyLoaned ? '' : d1))}">
+      </div>
+    </div>
+    <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
+      <span class="small muted" style="font-weight:600">По игровому времени:</span>
+      <button type="button" class="btn alt sm" data-ml-preset="${d05}">0.5 года (${fmtRuDate(d05)})</button>
+      <button type="button" class="btn alt sm" data-ml-preset="${d1}">1 год / сезон (${fmtRuDate(d1)})</button>
+      <button type="button" class="btn alt sm" data-ml-preset="${d15}">1.5 года (${fmtRuDate(d15)})</button>
+      <button type="button" class="btn alt sm" data-ml-preset="${d2}">2 года (${fmtRuDate(d2)})</button>
+    </div>
+    <div style="margin-top:10px">
+      <label style="font-weight:600;color:#0369a1">Условия аренды</label>
+      <input id="ml_term" value="${e(p.loanTerm || '')}" placeholder="Например: Аренда с правом выкупа">
+    </div>
+    <div class="row sp" style="margin-top:14px;flex-wrap:wrap;gap:8px">
+      <div class="row" style="gap:8px">
+        <button class="btn" id="ml_save">Сохранить</button>
+        <button type="button" class="btn alt" id="ml_clear" style="color:#b91c1c;border-color:#fca5a5">Снять аренду</button>
+      </div>
+      <button type="button" class="btn alt" id="ml_cancel">Отмена</button>
+    </div>`, m => {
+    const chk = m.querySelector('#ml_isLoan');
+    const inpFrom = m.querySelector('#ml_from');
+    const inpUntil = m.querySelector('#ml_until');
+    const inpTerm = m.querySelector('#ml_term');
+    m.querySelector('#ml_cancel').onclick = () => m.remove();
+    m.querySelectorAll('[data-ml-preset]').forEach(btn => {
+      btn.onclick = () => {
+        if (chk) chk.checked = true;
+        if (inpUntil) inpUntil.value = btn.dataset.mlPreset;
+      };
+    });
+    m.querySelector('#ml_clear').onclick = async () => {
+      const r = await act(() => api('/admin/player', {
+        id: p.id,
+        clearLoan: true,
+        isLoan: false
+      }), 'Статус аренды снят');
+      if (r) { m.remove(); if (typeof onSaved === 'function') onSaved(r.player); }
+    };
+    m.querySelector('#ml_save').onclick = async () => {
+      const loanFromVal = inpFrom?.value?.trim() || '';
+      const loanUntilVal = inpUntil?.value?.trim() || '';
+      const loanTermVal = inpTerm?.value?.trim() || '';
+      const isLoanVal = !!chk?.checked || !!(loanFromVal || loanUntilVal);
+      const r = await act(() => api('/admin/player', {
+        id: p.id,
+        isLoan: isLoanVal,
+        clearLoan: !isLoanVal,
+        loanFrom: loanFromVal,
+        loanUntil: loanUntilVal || null,
+        loanTerm: loanTermVal
+      }), 'Срок аренды обновлён');
+      if (r) { m.remove(); if (typeof onSaved === 'function') onSaved(r.player); }
+    };
+  });
 };
 
 const fmtDayOfWeek = d => {
@@ -4458,8 +4557,8 @@ function renderEuropeanTransferPanelHtml() {
               <option value="loan_mandatory_rpl">🛡️ Аренда с обязательным выкупом</option>
             </select>
           </div>
-          <div class="eur-tr-field" id="tr_loan_until_wrap" style="display:none;min-width:155px">
-            <label for="tr_loan_until">Аренда до даты</label>
+          <div class="eur-tr-field" id="tr_loan_until_wrap" style="display:none;min-width:165px">
+            <label for="tr_loan_until" title="Расчёт по игровому времени">Аренда до (игр. время)</label>
             <input type="date" id="tr_loan_until" value="${defaultLoanUntil('loan')}">
           </div>
           <div class="eur-tr-span-submit">
@@ -5489,15 +5588,18 @@ async function pgClub(app) {
       const hasLoan = !!(p.loanFrom || p.loanUntil || p.loanUntilText || (p.loanTerm && /аренд/i.test(p.loanTerm)));
       if (!hasLoan) return '';
       const untilFormatted = p.loanUntil ? fmtRuDate(p.loanUntil) : (p.loanUntilText || '');
+      const gd = getGameDate();
+      const isExpired = !!(p.loanUntil && gd && p.loanUntil < gd);
       const cleanTerm = p.loanTerm && !/^аренда$/i.test(p.loanTerm.trim()) && !/обязательным выкупом/i.test(p.loanTerm) && (!untilFormatted || !p.loanTerm.includes(untilFormatted))
         ? p.loanTerm
         : '';
       return `<div class="small" style="color:#0369a1;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">
         <span>🔄 В аренде${p.loanFrom ? ` из <b>${e(p.loanFrom)}</b>` : ''}</span>
         ${untilFormatted
-          ? `<span class="tag sm" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-weight:700">до ${e(untilFormatted)}</span>`
+          ? `<span class="tag sm" style="${isExpired ? 'background:#fef2f2;color:#b91c1c;border-color:#fca5a5' : 'background:#e0f2fe;color:#0369a1;border-color:#7dd3fc'};font-weight:700">до ${e(untilFormatted)}${isExpired ? ' (истекла)' : ''}</span>`
           : `<span class="tag sm" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1">срок не указан</span>`}
         ${cleanTerm ? `<span class="muted">(${e(cleanTerm)})</span>` : ''}
+        ${isAdmin ? `<button type="button" class="btn alt sm" data-edit-loan="${p.id}" style="padding:1px 7px;font-size:11px;min-height:0;border-color:#7dd3fc;color:#0369a1;background:#fff" title="Изменить срок или условия аренды">✏️ Срок</button>` : ''}
       </div>`;
     };
 
@@ -5512,6 +5614,7 @@ async function pgClub(app) {
       const regBadge = p.inRegistration
         ? '<span class="tag" style="background:#dcfce7;color:#166534;border-color:#86efac;font-weight:700">В заявке</span>'
         : '<span class="tag" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1">В резерве</span>';
+      const isLoaned = !!(p.loanFrom || p.loanUntil || p.loanUntilText || (p.loanTerm && /аренд/i.test(p.loanTerm)));
       const actionBtns = mode === 'reg'
         ? `<div class="row" style="gap:4px;flex-wrap:nowrap">
             <button class="btn alt sm" data-reg-out="${p.id}" ${!rw.canEdit ? 'disabled title="Заявка закрыта"' : ''}>Снять с заявки</button>
@@ -5520,6 +5623,7 @@ async function pgClub(app) {
             ${p.inRegistration
               ? `<button class="btn alt sm" data-reg-out="${p.id}" ${!rw.canEdit ? 'disabled title="Заявка закрыта"' : ''}>Из заявки</button>`
               : `<button class="btn sm" data-reg-in="${p.id}" ${!rw.canEdit ? 'disabled title="Заявка закрыта"' : ''}>В заявку</button>`}
+            ${isAdmin && !isLoaned ? `<button type="button" class="btn alt sm" data-edit-loan="${p.id}" style="border-color:#bae6fd;color:#0369a1" title="Настроить аренду и дату окончания">🔄 Аренда</button>` : ''}
             <button class="btn sm" data-terminate="${p.id}" data-pname="${e(p.name)}" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5" title="Разорвать контракт — игрок станет свободным агентом">Разорвать контракт</button>
           </div>`;
 
@@ -5643,7 +5747,7 @@ async function pgClub(app) {
       <div class="row sp" style="flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center">
         <div>
           <h3 style="margin:0">👥 Общий состав клуба (${rosterList.length} игроков · без лимита)</h3>
-          <div class="muted small" style="margin-top:3px">Все игроки клуба, включая арендованных (с указанием клуба и даты окончания аренды). Отсюда можно включать игроков в заявку на сезон, снимать с заявки или расторгать контракт.</div>
+          <div class="muted small" style="margin-top:3px">Все игроки клуба, включая арендованных (с указанием клуба и даты окончания аренды). 🎮 Игровое время: <b>${e(fmtRuDate(getGameDate()))}</b>.</div>
         </div>
         <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
           <button type="button" class="btn sm ${ROSTER_LOAN_FILTER === 'all' ? 'on' : 'alt'}" data-roster-filter="all">Все (${rosterList.length})</button>
@@ -5659,17 +5763,20 @@ async function pgClub(app) {
           <div style="display:flex;flex-direction:column;gap:6px">
             ${loanedOutList.sort((a, b) => (gp[a.pos] ?? 9) - (gp[b.pos] ?? 9)).map(p => {
               const untilTxt = p.loanUntil ? fmtRuDate(p.loanUntil) : (p.loanUntilText || '');
+              const gd = getGameDate();
+              const isExp = !!(p.loanUntil && gd && p.loanUntil < gd);
               return `<div class="row sp" style="padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;flex-wrap:wrap;gap:6px">
                 <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">
                   <span class="tag sm">${e(p.pos)}</span>
                   <b>${e(p.name)}</b>
                   <span class="muted small">→ в клубе <b>${e(p.loanedTo || 'Другой клуб')}</b></span>
                 </div>
-                <div class="row" style="gap:6px;align-items:center">
+                <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">
                   ${untilTxt
-                    ? `<span class="tag sm" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-weight:700">🔄 Аренда до ${e(untilTxt)}</span>`
+                    ? `<span class="tag sm" style="${isExp ? 'background:#fef2f2;color:#b91c1c;border-color:#fca5a5' : 'background:#e0f2fe;color:#0369a1;border-color:#7dd3fc'};font-weight:700">🔄 Аренда до ${e(untilTxt)}${isExp ? ' (истекла)' : ''}</span>`
                     : `<span class="tag sm" style="background:#f1f5f9;color:#475569">🔄 В аренде</span>`}
                   ${(p.mandatoryBuyoutOnRplRetention || p.mandatoryBuyout) ? `<span class="tag sm" style="background:#fef3c7;color:#92400e">🛡️ Выкуп ${e(p.buyoutFee || '€8.0M')}</span>` : ''}
+                  ${isAdmin ? `<button type="button" class="btn alt sm" data-edit-loan="${p.id}" style="padding:2px 7px;font-size:11px;min-height:0;border-color:#7dd3fc;color:#0369a1;background:#fff">✏️ Срок</button>` : ''}
                 </div>
               </div>`;
             }).join('')}
@@ -5709,6 +5816,12 @@ async function pgClub(app) {
     cb.querySelectorAll('[data-roster-filter]').forEach(b => b.onclick = () => {
       ROSTER_LOAN_FILTER = b.dataset.rosterFilter || 'all';
       pgClub(app);
+    });
+
+    cb.querySelectorAll('[data-edit-loan]').forEach(b => b.onclick = () => {
+      const pid = b.dataset.editLoan;
+      const pl = [...rosterList, ...regList, ...loanedOutList].find(x => x.id === pid);
+      if (pl) openAdminLoanModal(pl, () => pgClub(app));
     });
 
     if ($('#squad_tab_single')) {
@@ -6387,8 +6500,8 @@ async function pgClub(app) {
               <option value="exchange">🔄 Обмен игроками (с доплатой или без)</option>
             </select>
           </div>
-          <div id="cl_tr_loan_until_wrap" style="display:none;width:auto;min-width:160px">
-            <label class="small muted">Аренда до даты</label>
+          <div id="cl_tr_loan_until_wrap" style="display:none;width:auto;min-width:170px">
+            <label class="small muted" title="Расчёт по игровому времени">Аренда до (игр. время)</label>
             <input type="date" id="cl_tr_loan_until" value="${defaultLoanUntil('loan_1')}" style="width:100%">
           </div>
           <div style="width:auto;min-width:190px">
@@ -8036,7 +8149,7 @@ async function pgAdmin(app) {
         <td class="l">${t.code ? `<span class="code" data-cp="${t.code}" style="cursor:pointer" title="Скопировать">${t.code}</span>` : '<span class="muted">—</span>'}</td>
         <td>${t.roster ?? t.squad}</td>
         <td><b>${t.squad}/28</b> ${t.submitted ? '<span class="tag" style="background:#dcfce7;color:#166534;font-size:11px">подана</span>' : '<span class="muted small">черновик</span>'}</td>
-        <td class="l"><button class="btn alt sm" data-te="${t.id}">Изменить</button> <button class="btn alt sm" data-im="${t.id}">Загрузить игроков</button></td>
+        <td class="l"><button class="btn alt sm" data-club-squad="${t.id}" title="Открыть состав и аренды клуба">Состав</button> <button class="btn alt sm" data-te="${t.id}">Изменить</button> <button class="btn alt sm" data-im="${t.id}">Загрузить игроков</button></td>
       </tr>`).join('')}</tbody></table></div>
     </div>`;
 
@@ -8139,6 +8252,11 @@ async function pgAdmin(app) {
         go.onclick = () => run(true);
       });
     };
+    ab.querySelectorAll('[data-club-squad]').forEach(b => b.onclick = () => {
+      CLUB_TID = b.dataset.clubSquad;
+      CT = 'squad';
+      location.hash = '#/club';
+    });
     ab.querySelectorAll('[data-te]').forEach(b => b.onclick = () => teamForm(T.find(t => t.id === b.dataset.te)));
     ab.querySelectorAll('[data-im]').forEach(b => b.onclick = () => {
       const t = T.find(x => x.id === b.dataset.im);
@@ -8188,18 +8306,25 @@ async function pgAdmin(app) {
       $('#plist').innerHTML = `<table><thead><tr><th>№</th><th class="l">Имя</th><th>Поз.</th><th>Возр.</th><th class="l">Гражданство / Легионер</th><th class="l">Клуб</th><th class="l">Статус / Дисциплина</th><th class="l">Карточка</th><th></th></tr></thead><tbody>${l.map(p => {
         const leg = resolveLegionBadge(p);
         const legBadge = `<span class="tag" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;${leg.tagClass === 'legion' ? 'background:#fee2e2;color:#991b1b;border-color:#fca5a5' : (leg.tagClass === 'eaeu' ? 'background:#f0fdf4;color:#166534;border-color:#bbf7d0' : 'background:#eff6ff;color:#1e40af;border-color:#bfdbfe')}" title="${e(leg.details || '')}">${e(leg.label)}</span>`;
+        const gd = getGameDate();
+        const isExp = !!(p.loanUntil && gd && p.loanUntil < gd);
+        const hasLn = !!(p.loanFrom || p.loanUntil || (p.loanTerm && /аренд/i.test(p.loanTerm)));
         return `<tr>
           <td><b style="color:#1e3a8a">${p.number || p.num || '—'}</b></td>
-          <td class="l"><b>${e(p.name)}</b>${(p.loanFrom || p.loanUntil) ? `<div class="small" style="color:#0369a1;font-weight:600">🔄 В аренде${p.loanFrom ? ` из ${e(p.loanFrom)}` : ''}${p.loanUntil ? ` до ${e(fmtRuDate(p.loanUntil))}` : ''}</div>` : ''}</td>
+          <td class="l"><b>${e(p.name)}</b>${hasLn ? `<div class="small" style="color:${isExp ? '#b91c1c' : '#0369a1'};font-weight:600">🔄 В аренде${p.loanFrom ? ` из ${e(p.loanFrom)}` : ''}${p.loanUntil ? ` до ${e(fmtRuDate(p.loanUntil))}${isExp ? ' (истекла)' : ''}` : ''}</div>` : ''}</td>
           <td>${p.pos}</td>
           <td>${age(p.born)}${isBday(p.born) ? ' 🎂' : ''}</td>
           <td class="l" style="white-space:nowrap">${legBadge}</td>
           <td class="l"><div class="t-cell">${p.teamLogo ? `<img class="t-logo" src="${p.teamLogo}" alt=""/>` : ''}<span>${e(p.team)}</span></div></td>
           <td class="l">${p.verified ? '<span class="tag">нейросеть</span>' : '<span class="tag bg">вручную / пусто</span>'}</td>
-          <td style="white-space:nowrap"><button class="btn sm" data-pp="${p.id}" title="Сделать портрет (ИИ)">🧑‍🎨 Портрет</button> <button class="btn alt sm" data-pe="${p.id}">Править</button></td>
+          <td style="white-space:nowrap"><button class="btn alt sm" data-pl-loan="${p.id}" title="Настроить или изменить срок аренды">${hasLn ? '✏️ Срок' : '🔄 Аренда'}</button> <button class="btn sm" data-pp="${p.id}" title="Сделать портрет (ИИ)">🧑‍🎨 Портрет</button> <button class="btn alt sm" data-pe="${p.id}">Править</button></td>
         </tr>`;
       }).join('') || '<tr><td colspan="8" class="empty">В базе данных нет игроков. Вы можете добавить игрока кнопкой «+ Игрок»</td></tr>'}</tbody></table>`;
       $('#plist').querySelectorAll('[data-pe]').forEach(b => b.onclick = () => pform(l.find(p => p.id === b.dataset.pe)));
+      $('#plist').querySelectorAll('[data-pl-loan]').forEach(b => b.onclick = () => {
+        const pl = l.find(p => p.id === b.dataset.plLoan);
+        if (pl) openAdminLoanModal(pl, load);
+      });
       $('#plist').querySelectorAll('[data-pp]').forEach(b => b.onclick = async () => {
         const old = b.textContent;
         b.disabled = true; b.textContent = 'Работаю…';
@@ -8356,7 +8481,7 @@ async function pgAdmin(app) {
 
         <!-- Секция Аренды -->
         <div class="panel" style="background:#f0f9ff;border:1px solid #bae6fd;margin:10px 0;padding:12px">
-          <div class="row sp" style="margin-bottom:8px">
+          <div class="row sp" style="margin-bottom:8px;flex-wrap:wrap;gap:6px">
             <h4 style="margin:0;color:#0369a1;display:flex;align-items:center;gap:6px">
               <span>🔄 Аренда игрока</span>
               ${(p?.loanFrom || p?.loanUntil) ? `<span class="tag" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">В аренде${p?.loanUntil ? ' до ' + e(fmtRuDate(p.loanUntil)) : ''}</span>` : '<span class="tag" style="background:#fff;color:#6b7280">На контракте</span>'}
@@ -8376,6 +8501,13 @@ async function pgAdmin(app) {
               <label style="color:#0369a1;font-weight:600">Аренда до даты</label>
               <input type="date" id="f_loanUntil" value="${e(p?.loanUntil || '')}">
             </div>
+          </div>
+          <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
+            <span class="small muted" style="font-weight:600">🎮 Игровое время (${e(fmtRuDate(getGameDate()))}):</span>
+            <button type="button" class="btn sm alt" id="btn_loan_05">0.5 года (${fmtRuDate(defaultLoanUntil('loan_0.5'))})</button>
+            <button type="button" class="btn sm alt" id="btn_loan_1">1 год / сезон (${fmtRuDate(defaultLoanUntil('loan_1'))})</button>
+            <button type="button" class="btn sm alt" id="btn_loan_15">1.5 года (${fmtRuDate(defaultLoanUntil('loan_1.5'))})</button>
+            <button type="button" class="btn sm alt" id="btn_loan_2">2 года (${fmtRuDate(defaultLoanUntil('loan_2'))})</button>
           </div>
           <div style="margin-top:6px">
             <label style="color:#0369a1;font-weight:600">Условия аренды</label>
@@ -8406,8 +8538,7 @@ async function pgAdmin(app) {
             load();
           }
         };
-        m.querySelector('#psv').onclick = async () => {
-          // Quick handlers for ban
+
         const addDaysToToday = (days) => {
           const d = new Date();
           d.setDate(d.getDate() + days);
@@ -8425,7 +8556,6 @@ async function pgAdmin(app) {
         m.querySelector('#btn_ban_5')?.addEventListener('click', () => { m.querySelector('#f_banLeft').value = 5; m.querySelector('#f_banReason').value = 'Решение КДК РФС (грубое нарушение)'; m.querySelector('#f_banLabel').value = '5 матчей'; });
         m.querySelector('#btn_ban_1m')?.addEventListener('click', () => { m.querySelector('#f_banUntil').value = addDaysToToday(30); m.querySelector('#f_banLabel').value = '1 месяц'; m.querySelector('#f_banReason').value = 'Дисквалификация на 1 месяц'; });
 
-        // Quick handlers for injury
         const setInj = (days, label) => {
           const chk = m.querySelector('#f_hasInjury');
           if (chk) chk.checked = true;
@@ -8449,26 +8579,6 @@ async function pgAdmin(app) {
         m.querySelector('#btn_inj_90')?.addEventListener('click', () => setInj(90, 'Разрыв крестообразных связок (3 месяца)'));
         m.querySelector('#btn_inj_180')?.addEventListener('click', () => setInj(180, 'Тяжелая травма колена (6 месяцев)'));
 
-        const banLeftVal = parseInt(m.querySelector('#f_banLeft')?.value || '0', 10) || 0;
-        const banUntilVal = m.querySelector('#f_banUntil')?.value?.trim() || null;
-        const banReasonVal = m.querySelector('#f_banReason')?.value?.trim() || '';
-        const banLabelVal = m.querySelector('#f_banLabel')?.value?.trim() || '';
-
-        const hasInjury = m.querySelector('#f_hasInjury')?.checked;
-        const outUntilVal = m.querySelector('#f_outUntil')?.value?.trim();
-        const outDaysVal = parseInt(m.querySelector('#f_outDays')?.value || '0', 10) || 0;
-        const outReasonVal = m.querySelector('#f_outReason')?.value?.trim() || '';
-
-        let outPayload = null;
-        if (hasInjury && outUntilVal) {
-          outPayload = {
-            until: outUntilVal,
-            days: outDaysVal || 14,
-            label: outReasonVal || 'Травма',
-            reason: outReasonVal || 'Травма'
-          };
-        }
-
         m.querySelector('#quick_clear_loan')?.addEventListener('click', () => {
           const chk = m.querySelector('#f_isLoan');
           if (chk) chk.checked = false;
@@ -8476,13 +8586,43 @@ async function pgAdmin(app) {
           m.querySelector('#f_loanUntil').value = '';
           m.querySelector('#f_loanTerm').value = '';
         });
+        const setLoanPreset = (tp) => {
+          const chk = m.querySelector('#f_isLoan');
+          if (chk) chk.checked = true;
+          m.querySelector('#f_loanUntil').value = defaultLoanUntil(tp);
+        };
+        m.querySelector('#btn_loan_05')?.addEventListener('click', () => setLoanPreset('loan_0.5'));
+        m.querySelector('#btn_loan_1')?.addEventListener('click', () => setLoanPreset('loan_1'));
+        m.querySelector('#btn_loan_15')?.addEventListener('click', () => setLoanPreset('loan_1.5'));
+        m.querySelector('#btn_loan_2')?.addEventListener('click', () => setLoanPreset('loan_2'));
 
-        const isLoanVal = !!m.querySelector('#f_isLoan')?.checked;
-        const loanFromVal = m.querySelector('#f_loanFrom')?.value?.trim() || '';
-        const loanUntilVal = m.querySelector('#f_loanUntil')?.value?.trim() || '';
-        const loanTermVal = m.querySelector('#f_loanTerm')?.value?.trim() || '';
+        m.querySelector('#psv').onclick = async () => {
+          const banLeftVal = parseInt(m.querySelector('#f_banLeft')?.value || '0', 10) || 0;
+          const banUntilVal = m.querySelector('#f_banUntil')?.value?.trim() || null;
+          const banReasonVal = m.querySelector('#f_banReason')?.value?.trim() || '';
+          const banLabelVal = m.querySelector('#f_banLabel')?.value?.trim() || '';
 
-        const r = await act(() => api('/admin/player', {
+          const hasInjury = m.querySelector('#f_hasInjury')?.checked;
+          const outUntilVal = m.querySelector('#f_outUntil')?.value?.trim();
+          const outDaysVal = parseInt(m.querySelector('#f_outDays')?.value || '0', 10) || 0;
+          const outReasonVal = m.querySelector('#f_outReason')?.value?.trim() || '';
+
+          let outPayload = null;
+          if (hasInjury && outUntilVal) {
+            outPayload = {
+              until: outUntilVal,
+              days: outDaysVal || 14,
+              label: outReasonVal || 'Травма',
+              reason: outReasonVal || 'Травма'
+            };
+          }
+
+          const isLoanVal = !!m.querySelector('#f_isLoan')?.checked;
+          const loanFromVal = m.querySelector('#f_loanFrom')?.value?.trim() || '';
+          const loanUntilVal = m.querySelector('#f_loanUntil')?.value?.trim() || '';
+          const loanTermVal = m.querySelector('#f_loanTerm')?.value?.trim() || '';
+
+          const r = await act(() => api('/admin/player', {
             banLeft: banLeftVal,
             banUntil: banUntilVal,
             banReason: banReasonVal,
@@ -9621,8 +9761,8 @@ async function pgAdmin(app) {
               <option value="loan_mandatory_rpl">🛡️ Аренда с обязательным выкупом</option>
             </select>
           </div>
-          <div id="dt_loan_until_wrap" style="display:none;flex:1;min-width:155px">
-            <label class="small muted">Аренда до даты</label>
+          <div id="dt_loan_until_wrap" style="display:none;flex:1;min-width:165px">
+            <label class="small muted" title="Расчёт по игровому времени">Аренда до (игр. время)</label>
             <input type="date" id="dt_loan_until" value="${defaultLoanUntil('loan_1')}" style="width:100%">
           </div>
           <div style="flex:1.2;min-width:180px">

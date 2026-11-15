@@ -4281,14 +4281,38 @@ function normalizeLoanUntil(raw: any): string | null {
   if (check.getUTCFullYear() !== yr || check.getUTCMonth() + 1 !== mo || check.getUTCDate() !== dy) return null;
   return iso;
 }
+function getCurrentGameDate(season = S()): string {
+  const s = String(season || S() || "").trim();
+  const fx = (db?.fixtures || []).filter((f) => (!s || (f.season || S()) === s) && !f.tech);
+  const doneDates: string[] = [];
+  const pendingDates: string[] = [];
+  for (const f of fx) {
+    const raw = String(f.gameDate || f.date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) continue;
+    if (f.status === "done" || f.status === "live") doneDates.push(raw);
+    else pendingDates.push(raw);
+  }
+  if (doneDates.length) {
+    doneDates.sort();
+    return doneDates[doneDates.length - 1];
+  }
+  if (pendingDates.length) {
+    pendingDates.sort();
+    return pendingDates[0];
+  }
+  const sm = s.match(/^(\d{4})/);
+  if (sm) return `${sm[1]}-07-18`;
+  return todayMsk();
+}
 function computeLoanUntil(opts: { transferType?: any; loanUntil?: any; note?: any; season?: any; baseDate?: any } = {}): string {
   const explicit = normalizeLoanUntil(opts.loanUntil);
   if (explicit) return explicit;
-  const base = normalizeLoanUntil(opts.baseDate) || todayMsk();
+  const seasonStr = String(opts.season || S() || "");
+  const base = normalizeLoanUntil(opts.baseDate) || getCurrentGameDate(seasonStr || S());
   const baseYr = +base.slice(0, 4);
   const baseMo = +base.slice(5, 7);
-  const seasonStr = String(opts.season || S() || `${baseYr}/${String(baseYr + 1).slice(-2)}`);
-  const sm = seasonStr.match(/^(\d{4})/);
+  const effectiveSeason = seasonStr || `${baseMo >= 6 ? baseYr : baseYr - 1}/${String((baseMo >= 6 ? baseYr : baseYr - 1) + 1).slice(-2)}`;
+  const sm = effectiveSeason.match(/^(\d{4})/);
   const startYr = sm ? +sm[1] : (baseMo >= 6 ? baseYr : baseYr - 1);
   const endYr = startYr + 1;
   const tt = String(opts.transferType || "").toLowerCase();
@@ -4297,10 +4321,12 @@ function computeLoanUntil(opts: { transferType?: any; loanUntil?: any; note?: an
     return `${endYr + 1}-06-30`;
   }
   if (tt === "loan_1.5" || /1[.,]5\s*(?:год|г\.)/.test(note)) {
+    if (base >= `${endYr}-05-15`) return `${endYr + 1}-12-31`;
     return baseMo >= 6 ? `${endYr}-12-31` : `${endYr + 1}-06-30`;
   }
   if (tt === "loan_0.5" || /0[.,]5\s*(?:год|г\.)|полгода/.test(note)) {
     if (baseMo >= 6 && baseMo <= 11) return `${startYr}-12-31`;
+    if (base >= `${endYr}-05-15`) return `${endYr}-12-31`;
     return baseMo === 12 ? `${baseYr + 1}-06-30` : `${endYr}-06-30`;
   }
   if (base >= `${endYr}-05-15`) return `${endYr + 1}-06-30`;
@@ -4506,7 +4532,7 @@ function executeTransferIfBothApproved(t) {
         const resolvedUntil = normalizeLoanUntil(t.loanUntil) || computeLoanUntil({
           transferType: t.transferType || t.type,
           note: t.note,
-          baseDate: t.date
+          baseDate: normalizeLoanUntil(t.gameDate) || getCurrentGameDate()
         });
         p.loanFrom = t.fromName || (t.from ? tn(t.from) : "\u041A\u043B\u0443\u0431");
         p.loanFromId = t.from || null;
@@ -9636,6 +9662,7 @@ app.get("/api/state", (req, res) => {
   res.json({
     season: S(),
     seasons: getAvailableSeasons(),
+    gameDate: getCurrentGameDate(),
     realStartDate: db.settings.realStartDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
     timeMode: db.settings.timeMode || "game",
     auto: !!db.settings.auto,
@@ -11961,7 +11988,8 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
         }
       }
       const rawTransferType = String(req.body.transferType || req.body.type || "");
-      const resolvedLoanUntil = isLoan ? computeLoanUntil({ transferType: rawTransferType, loanUntil: req.body.loanUntil, baseDate: todayMsk() }) : null;
+      const gameNow = getCurrentGameDate();
+      const resolvedLoanUntil = isLoan ? computeLoanUntil({ transferType: rawTransferType, loanUntil: req.body.loanUntil, baseDate: gameNow }) : null;
       const loanTermTag = rawTransferType === "loan_0.5" ? "\u0410\u0440\u0435\u043D\u0434\u0430 (0.5 \u0433\u043E\u0434\u0430)" : rawTransferType === "loan_1" ? "\u0410\u0440\u0435\u043D\u0434\u0430 (1 \u0433\u043E\u0434)" : "\u0410\u0440\u0435\u043D\u0434\u0430";
       let note = String(req.body.note || (isExchange ? `\u041E\u0431\u043C\u0435\u043D \u043D\u0430 ${exchangeP?.name || "\u0438\u0433\u0440\u043E\u043A\u0430"}${feeNum > 0 ? ` + \u0434\u043E\u043F\u043B\u0430\u0442\u0430 ${feeStr}` : ""}` : isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${buyoutFeeStr})${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}${loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCondition}\xBB` : ""}` : isLoan ? `${loanTermTag}${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}` : "\u041F\u043E\u043B\u043D\u043E\u0446\u0435\u043D\u043D\u044B\u0439 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440")).slice(0, 300);
       if (sellOnPct > 0 && !note.includes("Sell-on")) {
@@ -11997,6 +12025,7 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
         clubApprovedBy: p.teamId,
         initiator: req.tid,
         date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+        gameDate: gameNow,
         at: Date.now()
       };
       db.transfers.unshift(trObj);
@@ -12012,7 +12041,7 @@ app.post("/api/club/squad/add", needClub, async (req, res) => {
       const isMand = !!(req.body.mandatoryBuyout || String(req.body.transferType || "").includes("mandatory"));
       const isLn = isMand || String(req.body.transferType || "").includes("loan");
       if (isLn) {
-        const directUntil = computeLoanUntil({ transferType: req.body.transferType, loanUntil: req.body.loanUntil, baseDate: todayMsk() });
+        const directUntil = computeLoanUntil({ transferType: req.body.transferType, loanUntil: req.body.loanUntil, baseDate: getCurrentGameDate() });
         p.loanFrom = req.body.fromForeignClub ? String(req.body.fromForeignClub).trim() : p.loanFrom || null;
         p.loanUntil = directUntil;
         const cond = String(req.body.loanCondition || req.body.buyoutCondition || "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0438\u0441\u043A\u0438 \u0432 \u0420\u041F\u041B").trim();
@@ -13277,13 +13306,20 @@ app.post("/api/admin/player", admin, (req, res) => {
     delete p.buyoutFee;
     delete p.loanCondition;
   } else if (b.isLoan || b.loanFrom !== void 0 || b.loanUntil !== void 0 || b.loanTerm !== void 0) {
-    if (b.loanFrom !== void 0) p.loanFrom = String(b.loanFrom || "").trim() || null;
+    if (b.loanFrom !== void 0) {
+      const lf = String(b.loanFrom || "").trim() || null;
+      p.loanFrom = lf;
+      if (b.loanFromId === void 0) {
+        const matchedTeam = lf ? db.teams.find((tm) => String(tm.name || "").trim().toLowerCase() === lf.toLowerCase()) : null;
+        p.loanFromId = matchedTeam ? matchedTeam.id : null;
+      }
+    }
     if (b.loanFromId !== void 0) p.loanFromId = String(b.loanFromId || "").trim() || null;
     if (b.loanUntil !== void 0) {
       const lu = normalizeLoanUntil(b.loanUntil);
       p.loanUntil = lu || null;
     } else if (b.isLoan && !p.loanUntil) {
-      p.loanUntil = computeLoanUntil({ transferType: "loan", baseDate: todayMsk() });
+      p.loanUntil = computeLoanUntil({ transferType: "loan", baseDate: getCurrentGameDate() });
     }
     if (b.loanTerm !== void 0) p.loanTerm = String(b.loanTerm || "").trim() || null;
     else if (b.isLoan && !p.loanTerm) p.loanTerm = "\u0410\u0440\u0435\u043D\u0434\u0430";
@@ -15630,7 +15666,8 @@ app.post("/api/admin/transfer/direct", admin, (req, res) => {
   const buyoutFeeStr = isMandatoryBuyout ? sanitizeFeePair(req.body.buyoutFee, feeNum > 0 ? feeStr : "\u20AC1.0M").feeStr : null;
   const loanCondition = isMandatoryBuyout ? String(req.body.loanCondition || req.body.buyoutCondition || "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0438\u0441\u043A\u0438 \u0432 \u0420\u041F\u041B").trim() : null;
   const sellOnPct = Math.min(90, Math.max(0, Number(req.body.sellOnPercent) || 0));
-  const resolvedLoanUntil = isLoan ? computeLoanUntil({ transferType, loanUntil: req.body.loanUntil, baseDate: todayMsk() }) : null;
+  const gameNow = getCurrentGameDate();
+  const resolvedLoanUntil = isLoan ? computeLoanUntil({ transferType, loanUntil: req.body.loanUntil, baseDate: gameNow }) : null;
   let note = isMandatoryBuyout ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${buyoutFeeStr})${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}${loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${loanCondition}\xBB` : ""}` : isLoan ? `${loanMap[transferType] || "\u0410\u0440\u0435\u043D\u0434\u0430"}${resolvedLoanUntil ? ` \u0434\u043E ${ruDateStr(resolvedLoanUntil)}` : ""}` : "\u041F\u043E\u043B\u043D\u043E\u0446\u0435\u043D\u043D\u044B\u0439 \u0442\u0440\u0430\u043D\u0441\u0444\u0435\u0440";
   if (sellOnPct > 0) {
     note += ` \xB7 Sell-on clause ${sellOnPct}%`;
@@ -15662,6 +15699,7 @@ app.post("/api/admin/transfer/direct", admin, (req, res) => {
     clubApproval: isRplToRpl && !force ? "pending" : "approved",
     clubApprovedBy: fromTeamId,
     date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+    gameDate: gameNow,
     byAdmin: true
   };
   db.transfers.unshift(trObj);
@@ -16028,7 +16066,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
         fromClub: String(p.fromClub || p.club || p.europeanClub || "").trim(),
         fee: String(p.fee || "€5.0M").trim(),
         type: tp,
-        loanUntil: isLn ? computeLoanUntil({ transferType: tp, loanUntil: p.loanUntil, baseDate: todayMsk() }) : null,
+        loanUntil: isLn ? computeLoanUntil({ transferType: tp, loanUntil: p.loanUntil, baseDate: getCurrentGameDate() }) : null,
         mandatoryBuyout: isMand,
         buyoutFee: isMand ? String(p.buyoutFee || p.fee || "€8.0M").trim() : void 0,
         loanCondition: isMand ? String(p.loanCondition || p.buyoutCondition || "Сохранение прописки в РПЛ").trim() : void 0,
@@ -16051,7 +16089,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
         transferType: isMand ? "loan_mandatory_rpl" : "loan",
         loanUntil: dateMatch ? dateMatch[1] : null,
         note: l,
-        baseDate: todayMsk()
+        baseDate: getCurrentGameDate()
       }) : null;
       const sellMatch = fullLine.match(/(?:sell[- ]?on|перепродаж\w*)[^\d]*(\d+)\s*%/i) || fullLine.match(/(\d+)\s*%\s*(?:sell[- ]?on|перепродаж\w*)/i);
       const sellOnPct = sellMatch ? Math.min(90, Math.max(0, Number(sellMatch[1]))) : 0;
@@ -16150,7 +16188,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       fromClub: String(fromClub || club || europeanClub || "").trim(),
       fee: parsedSingleFee.feeStr,
       type: singleType,
-      loanUntil: isLn ? computeLoanUntil({ transferType: singleType, loanUntil: req.body.loanUntil, baseDate: todayMsk() }) : null,
+      loanUntil: isLn ? computeLoanUntil({ transferType: singleType, loanUntil: req.body.loanUntil, baseDate: getCurrentGameDate() }) : null,
       mandatoryBuyout: isMand,
       buyoutFee: isMand ? sanitizeFeePair(req.body.buyoutFee, parsedSingleFee.feeAmount > 0 ? parsedSingleFee.feeStr : "€1.0M").feeStr : void 0,
       loanCondition: isMand ? String(req.body.loanCondition || req.body.buyoutCondition || "Сохранение прописки в РПЛ").trim() : void 0,
@@ -16161,6 +16199,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
     return fail(res, "Укажите ФИО игрока, позицию, возраст, страну, клуб и цену (или введите список игроков)");
   }
   const createdRequests = [];
+  const gameNowEuro = getCurrentGameDate();
   for (const item of itemsToProcess) {
     const enriched = await enrichEuropeanPlayer(item.name, item.fee, item.type, {
       pos: item.pos,
@@ -16193,6 +16232,7 @@ app.post("/api/club/transfer-request", needClub, async (req, res) => {
       sellOnPercent: Number(item.sellOnPercent) || 0,
       status: "pending",
       aiVerdict: null,
+      gameDate: gameNowEuro,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     db.transferRequests.unshift(reqObj);
@@ -16390,7 +16430,7 @@ app.post("/api/admin/transfer-requests/resolve", admin, (req, res) => {
       seasonYC: 0,
       banLeft: 0,
       loanFrom: r.transferType === "loan" || isMand ? r.fromClub : void 0,
-      loanUntil: r.transferType === "loan" || isMand ? (normalizeLoanUntil(r.loanUntil) || computeLoanUntil({ transferType: r.transferType, baseDate: String(r.createdAt || "").slice(0, 10) || todayMsk() })) : void 0,
+      loanUntil: r.transferType === "loan" || isMand ? (normalizeLoanUntil(r.loanUntil) || computeLoanUntil({ transferType: r.transferType, baseDate: normalizeLoanUntil(r.gameDate) || getCurrentGameDate() })) : void 0,
       loanTerm: isMand ? `\u0410\u0440\u0435\u043D\u0434\u0430 \u0441 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u043A\u0443\u043F\u043E\u043C (${r.buyoutFee || r.fee})${r.loanCondition ? ` \u043F\u0440\u0438 \u0443\u0441\u043B\u043E\u0432\u0438\u0438: \xAB${r.loanCondition}\xBB` : ""}` : r.transferType === "loan" ? r.fee || "\u0410\u0440\u0435\u043D\u0434\u0430" : void 0,
       mandatoryBuyoutOnRplRetention: isMand,
       mandatoryBuyout: isMand,
@@ -16821,6 +16861,7 @@ export {
   generateDrawAiScript,
   getAvailableSeasons,
   getCupWinnerForSeason,
+  getCurrentGameDate,
   getLineup,
   getMatchMotm,
   getPreviousSeason,
